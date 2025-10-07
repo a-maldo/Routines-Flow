@@ -100,7 +100,8 @@ Cada archivo representa una secuencia **válida** para un **nivel** y **evento**
   ]
 }
 
-Reglas:
+
+## Reglas:
 
 nivel: Baby|Basico|Intermedio (valores oficiales TGC).
 
