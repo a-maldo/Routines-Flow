@@ -12,3 +12,5 @@ Juego educativo inspirado en las rutinas de gimnasia artística femenina del Tur
 - Modo entrenamiento libre  
 - Música de rutina por nivel  
 - Estadísticas locales (tiempo de reacción y precisión)
+
+📘 [Ver Roadmap completo de desarrollo](./PROJECTS.md)
