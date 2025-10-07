@@ -81,13 +81,7 @@
 
 ## 🗂️ Estructura del proyecto
 
-root ├─ index.html ├─ /assets               
-# imágenes, íconos, audio (sfx) ├─ /css                  
-# estilos ├─ /js                   
-# lógica │  ├─ core/              
-# loop, spawner, colliders, scoring │  ├─ ui/                # HUD, menús, modales, toggles │  └─ storage/           # utilidades de localStorage ├─ /data │  └─ routines/          
-# JSON por nivel/evento └─ /docs                 
-# Documentación (GitHub Pages) ├─ index.md ├─ manual-usuario.md ├─ guia-docente.md ├─ api.md ├─ monetizacion.md └─ privacidad.md
+root ├─ index.html ├─ /assets               # imágenes, íconos, audio (sfx) ├─ /css                  # estilos ├─ /js                   # lógica │  ├─ core/              # loop, spawner, colliders, scoring │  ├─ ui/                # HUD, menús, modales, toggles │  └─ storage/           # utilidades de localStorage ├─ /data │  └─ routines/          # JSON por nivel/evento └─ /docs                 # Documentación (GitHub Pages) ├─ index.md ├─ manual-usuario.md ├─ guia-docente.md ├─ api.md ├─ monetizacion.md └─ privacidad.md
 
 ---
 
