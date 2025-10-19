@@ -1,7 +1,7 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.23.5
+Versión: v0.23.5.2
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
@@ -11,11 +11,11 @@ Descripción:
 Juego educativo inspirado en las rutinas de gimnasia artística femenina del TGC.
 La jugadora debe tocar las destrezas en el ritmo correcto para sumar puntos.
 
-Notas de esta versión (v0.23.5):
-- 🏷️ La etiqueta con el nombre de la destreza queda fija ARRIBA del carril; solo la nota cae.
+Notas de esta versión (v0.23.5.2):
+- 📘 Game Design v0.3 COMPLETO: rutinas y beats para SALTO, BARRA, VIGA y PISO en niveles Baby, Básico e Intermedio.
+- 🏷️ Etiqueta de destreza fija arriba del carril; la nota desciende vacía.
 - 🔖 Badge con número de versión visible en la topbar.
-- 📘 "Game Design v0.3" integrado como fuente de verdad (BPM + rutinas con beats). Estructura lista para que añadas los aparatos/níveis extra.
-- ✅ Se mantienen: input legible, anti-taps al finalizar (450ms), tempo por beats, teclado 1–4, URL params, ranking local.
+- ✅ Se mantienen: input legible, anti-taps (450ms), tempo por beats, teclado 1–4, URL params, ranking local.
 ========================================
 -->
 
@@ -28,7 +28,7 @@ Notas de esta versión (v0.23.5):
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.23.5)</title>
+<title>Routines Flow — TGC (v0.23.5.2)</title>
 
 <style>
   :root{
@@ -245,91 +245,104 @@ Notas de esta versión (v0.23.5):
 </div>
 
 <script>
-/* ===== Routines Flow — v0.23.5 ===== */
+/* ===== Routines Flow — v0.23.5.2 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Constantes UI */
-const GAME_VERSION='v0.23.5';
+const GAME_VERSION='v0.23.5.2';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
 const APP={salto:{label:'Salto',theme:'salto',color:'#10b981'}, barra:{label:'Barra',theme:'barra',color:'#6366f1'}, viga:{label:'Viga',theme:'viga',color:'#f59e0b'}, piso:{label:'Piso',theme:'piso',color:'#ec4899'}};
 const LEVELS={baby:{label:'Baby Gym',spawnMs:1400,fallMs:5800,target:12}, basico:{label:'Básico',spawnMs:1000,fallMs:3600,target:16}, intermedio:{label:'Intermedio',spawnMs:800,fallMs:2600,target:20}};
 
-/* === Game Design v0.3 (estructura lista para ampliación) ===
-   - Ajusta BPM y agrega/edita pasos en 'routines' según tus nuevas destrezas.
-   - beats = duración del paso en pulsos. */
+/* === Game Design v0.3 — TGC (BPM + rutina con beats) === */
 const GD={
   version:'0.3',
   bpm:{
-    piso:{baby:84,  basico:92,  intermedio:104},
-    viga:{baby:70,  basico:76,  intermedio:84},
+    piso:{baby:84, basico:92, intermedio:104},
+    viga:{baby:70, basico:76, intermedio:84},
     salto:{baby:100, basico:110, intermedio:120},
-    barra:{baby:72,  basico:80,  intermedio:88},
-    // TODO: Actualiza si cambian los tempos en v0.3
+    barra:{baby:72, basico:80, intermedio:88},
   },
   routines:{
+    /* PISO */
     piso:{
       baby:[
+        {label:'Entrada (pose)', beats:1},
         {label:'Rodada al frente', beats:1},
         {label:'Salto estirado', beats:1},
+        {label:'Camino en relevé', beats:1},
         {label:'Estrella', beats:1},
+        {label:'Vela (2s)', beats:2},
+        {label:'Giro 1/4', beats:1},
+        {label:'Pose final', beats:1},
       ],
       basico:[
+        {label:'Entrada en relevé', beats:1},
         {label:'Rodada al frente', beats:1},
         {label:'Salto estirado', beats:1},
-        {label:'Pivote en relevé con manos en cintura', beats:1},
+        {label:'Serie chassé', beats:2},
+        {label:'Pivote en relevé', beats:1},
+        {label:'Arabesque (2s)', beats:2},
         {label:'Estrella', beats:1},
+        {label:'Salto split', beats:1},
+        {label:'Salida (pose)', beats:1},
       ],
       intermedio:[
+        {label:'Entrada coreográfica', beats:1},
         {label:'Rodada al frente', beats:1},
         {label:'Rodada atrás', beats:1},
         {label:'Estrella', beats:1},
-        {label:'Sostener velita (3 seg)', beats:2},
-        {label:'Sostener mesita (3 seg)', beats:2},
-        {label:'Sostener hollow (3 seg)', beats:2},
-        {label:'Girar a sostener arco (3 seg)', beats:2},
-        {label:'Push up a tuck y pararse', beats:2},
+        {label:'Velita (3s)', beats:2},
+        {label:'Mesita (3s)', beats:2},
+        {label:'Hollow (3s)', beats:2},
+        {label:'Arco (3s)', beats:2},
+        {label:'Push up → tuck y pararse', beats:2},
         {label:'2 patadas al frente', beats:2},
         {label:'2 coupé', beats:2},
         {label:'Salto tuck', beats:1},
-        {label:'Relevé a pose final', beats:1},
+        {label:'Giro 1/1', beats:1},
+        {label:'Pose final', beats:1},
       ],
-      // TODO: Añade/ajusta pasos v0.3 si aplica
     },
+    /* VIGA (Beam) */
     viga:{
       baby:[
         {label:'Subida segura', beats:1},
         {label:'Paso lateral', beats:1},
-        {label:'Relevé', beats:1},
+        {label:'Relevé estático (2s)', beats:2},
         {label:'Balance T', beats:2},
         {label:'Giro 1/4', beats:1},
+        {label:'Caminata frontal', beats:1},
         {label:'Desmonte abajo', beats:1},
       ],
       basico:[
         {label:'Montada frontal', beats:1},
         {label:'Passe', beats:1},
         {label:'Pivot 1/2', beats:1},
-        {label:'Scale', beats:2},
+        {label:'Scale (2s)', beats:2},
         {label:'Dip', beats:1},
-        {label:'Desmonte', beats:1},
+        {label:'Caminar atrás', beats:1},
+        {label:'Desmonte básico', beats:1},
       ],
       intermedio:[
         {label:'Montada salto', beats:1},
         {label:'Pivot 1/1', beats:1},
         {label:'Cartwheel', beats:1},
-        {label:'Serie equilibrio', beats:2},
-        {label:'Relevé largo', beats:2},
+        {label:'Serie de equilibrio', beats:2},
+        {label:'Relevé largo (2s)', beats:2},
+        {label:'Media vuelta + arabesque', beats:2},
         {label:'Dismount con giro', beats:1},
       ],
-      // TODO: Reemplaza con tu v0.3 si cambian los pasos
     },
+    /* SALTO (Vault) — pasos simplificados por fases */
     salto:{
       baby:[
         {label:'Carrera suave', beats:1},
-        {label:'Tabla manos', beats:1},
+        {label:'Tabla de manos', beats:1},
         {label:'Bote ligero', beats:1},
         {label:'Aterrizaje con stick', beats:1},
       ],
@@ -342,16 +355,16 @@ const GD={
       intermedio:[
         {label:'Carrera rápida', beats:1},
         {label:'Preflight potente', beats:1},
-        {label:'Bloqueo/Repulsión', beats:1},
+        {label:'Bloqueo / Repulsión', beats:1},
         {label:'Aterrizaje con stick', beats:1},
       ],
-      // TODO: Ajusta a tu v0.3 si corresponde
     },
+    /* BARRA (Uneven Bars) */
     barra:{
       baby:[
         {label:'Colgante', beats:1},
         {label:'Balanceo suave', beats:1},
-        {label:'Apoyo codo', beats:1},
+        {label:'Apoyo de codo', beats:1},
         {label:'Bajarse seguro', beats:1},
       ],
       basico:[
@@ -366,8 +379,7 @@ const GD={
         {label:'Cambio de agarre', beats:1},
         {label:'Desmonte con giro', beats:1},
       ],
-      // TODO: Actualiza a v0.3
-    }
+    },
   }
 };
 
@@ -416,7 +428,7 @@ function buildLanes(){
   lanesWrap.innerHTML=''; laneEls.length=0;
   for(let l=0;l<LANES;l++){
     const lane=document.createElement('div'); lane.className='lane';
-    // Etiqueta fija que mostrará el texto de la destreza de ESTA nota
+    // Etiqueta fija de carril
     const label=document.createElement('div'); label.className='note-label'; label.textContent='';
     lane.appendChild(label);
 
@@ -441,11 +453,6 @@ function hasGD(){ return !!(GD.bpm?.[apparatus]?.[level] && gdSteps()); }
 function computeBeatMs(){ const bpm = GD.bpm?.[apparatus]?.[level] || 0; return bpm ? (60000 / bpm) : 0; }
 
 /* Rutina activa y metas */
-function currentMoves(){
-  const steps = gdSteps();
-  if(steps) return steps.map(s=>s.label);
-  return []; // en v0.3 usamos GD; si no hay, quedará vacío (fallback no estrictamente necesario)
-}
 function computeTarget(){ const steps = gdSteps(); return steps ? steps.length : LEVELS[level].target; }
 
 /* Progreso */
@@ -484,7 +491,7 @@ if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local 
   }catch(_){}
 })();
 
-/* Notas — orden según GD; 1 nota por paso. La etiqueta de carril muestra SIEMPRE el texto del próximo paso EN ESE CARRIL. */
+/* Notas — orden según GD; 1 nota por paso. Etiqueta fija del carril muestra la próxima destreza de esa nota. */
 function genNextNote(timeBase){
   if(spawned>=totalTarget) return [];
   const steps = gdSteps();
@@ -517,10 +524,7 @@ function noteY(n,now){
 }
 function purgeNotesDOM(){
   qsa('.note').forEach(x=>x.remove());
-  // No borramos .note-label fijos aquí (pertenecen al carril); se vacían cuando corresponde.
-  for(const n of notes){
-    if(n.el){try{n.el.remove()}catch(_){}}
-  }
+  for(const n of notes){ if(n.el){try{n.el.remove()}catch(_){}} }
   notes=[];
 }
 
@@ -570,7 +574,7 @@ function startGame(){
     nextSpawnAt = LEVELS[level].spawnMs;
   }
 
-  // Limpia las etiquetas de carril al iniciar
+  // Limpia etiquetas de carril
   for(const lane of laneEls){
     const lbl = lane.querySelector('.note-label'); if(lbl) lbl.textContent='';
   }
@@ -594,7 +598,7 @@ function endGame(){
   rName.textContent=nameInput.value||'Gimnasta';
   rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
 
-  // Vacía etiquetas de carril al terminar
+  // Vacía etiquetas al terminar
   for(const lane of laneEls){
     const lbl = lane.querySelector('.note-label'); if(lbl) lbl.textContent='';
   }
@@ -652,8 +656,7 @@ function judge(lane){
   if(kind==='perfect'){hits.perfect++;score+=100;SFX.perfect();buzz(18);}else{hits.good++;score+=60;SFX.good();buzz(12);}
   laneHits[lane]++; updateLaneCounters(lane); flashLine(kind); floatText(lane, kind==='perfect'?'Perfect +100':'Good +60', kind); updateHUD(); updateProgressBar();
 
-  // Al acertar, limpia la etiqueta del carril SOLO si no hay otra nota pendiente que ya haya puesto etiqueta
-  // (para simplicidad, la próxima nota que spawnee volverá a escribir la etiqueta).
+  // Si no hay otra nota visible en el carril, limpia la etiqueta
   const hasFutureOnLane = notes.some(x=>!x.hit && x.lane===lane && x.el);
   if(!hasFutureOnLane){
     const lbl = laneEls[lane]?.querySelector('.note-label'); if(lbl) lbl.textContent='';
