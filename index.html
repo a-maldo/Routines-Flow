@@ -1,7 +1,7 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.23.4
+Versión: v0.23.5
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
@@ -11,11 +11,11 @@ Descripción:
 Juego educativo inspirado en las rutinas de gimnasia artística femenina del TGC.
 La jugadora debe tocar las destrezas en el ritmo correcto para sumar puntos.
 
-Notas de esta versión (v0.23.4):
-- 📘 Integrado "Game Design v0.2": BPM por aparato/nivel y rutinas ordenadas con beats.
-- ⏱️ El spawn usa tempo musical (60000/BPM * beats por paso).
-- 🎯 El objetivo de cada partida = número de pasos del Game Design (si existe definición).
-- ✅ Se mantienen los fixes: input visible, anti-taps al finalizar (450ms), URL params, teclado 1–4, etc.
+Notas de esta versión (v0.23.5):
+- 🏷️ La etiqueta con el nombre de la destreza queda fija ARRIBA del carril; solo la nota cae.
+- 🔖 Badge con número de versión visible en la topbar.
+- 📘 "Game Design v0.3" integrado como fuente de verdad (BPM + rutinas con beats). Estructura lista para que añadas los aparatos/níveis extra.
+- ✅ Se mantienen: input legible, anti-taps al finalizar (450ms), tempo por beats, teclado 1–4, URL params, ranking local.
 ========================================
 -->
 
@@ -28,7 +28,7 @@ Notas de esta versión (v0.23.4):
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.23.4)</title>
+<title>Routines Flow — TGC (v0.23.5)</title>
 
 <style>
   :root{
@@ -49,13 +49,33 @@ Notas de esta versión (v0.23.4):
   .game{position:relative;width:100%;max-width:500px;height:calc(100dvh - 16px);max-height:920px;border-radius:var(--radius);background:linear-gradient(#fff,#F2F5FA);overflow:hidden;border:1px solid #e5e7eb;box-shadow:var(--shadow)}
 
   .topbar{position:absolute;left:0;right:0;top:0;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;z-index:30;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.6));border-bottom:1px solid #eef2f7}
-  .title{font-weight:800;font-size:14px}
+  .title{font-weight:800;font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .chip{background:#eef2f7;border-radius:999px;padding:4px 8px;font-size:12px}
   .btn-icon{border:1px solid #e5e7eb;background:#fff;padding:8px;border-radius:10px;cursor:pointer}
 
   .stage{position:absolute;left:10px;right:10px;top:56px;bottom:130px;border-radius:18px;border:1px solid #fff;background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.72));overflow:hidden}
   .lanes{position:absolute;inset:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .lane{position:relative;background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:16px;overflow:visible}
+
+  /* Etiqueta fija arriba del carril (no se mueve) */
+  .note-label{
+    position:absolute;
+    top:8px;
+    left:50%;
+    transform:translateX(-50%);
+    padding:4px 8px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    color:#0b1220;
+    background:rgba(255,255,255,.95);
+    border:1px solid #e5e7eb;
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+    white-space:nowrap;
+    user-select:none;
+    pointer-events:none;
+    z-index:5;
+  }
 
   .note{position:absolute;left:50%;transform:translateX(-50%);border-radius:999px;color:#fff;font-weight:800;font-size:13px;padding:8px 14px;box-shadow:var(--note-shadow);border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;max-width:180px;text-align:center;will-change:transform}
   .note.piso{background:var(--accent)} .note.viga{background:var(--accent-alt)}
@@ -80,7 +100,7 @@ Notas de esta versión (v0.23.4):
   .pill.on{background:#0f172a;color:#fff;border-color:#0f172a}
   .field{display:flex;flex-direction:column;gap:6px}
 
-  /* Input SIEMPRE legible */
+  /* Input legible */
   .input{
     padding:12px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;
     font-weight:700;color:var(--ink);caret-color:var(--ink);
@@ -137,7 +157,10 @@ Notas de esta versión (v0.23.4):
 <body>
 <div class="game" id="game">
   <div class="topbar">
-    <div class="title">⭐ Routines Flow — <span id="apparatusLabel">Salto</span></div>
+    <div class="title">
+      ⭐ Routines Flow — <span id="apparatusLabel">Salto</span>
+      <span class="chip" id="verBadge"></span>
+    </div>
     <div class="hud">
       <span class="chip" id="levelBadge">BABY GYM</span>
       <span class="chip">Puntaje: <b id="score">0</b></span>
@@ -222,25 +245,30 @@ Notas de esta versión (v0.23.4):
 </div>
 
 <script>
-/* ===== Routines Flow — v0.23.4 ===== */
+/* ===== Routines Flow — v0.23.5 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+/* Constantes UI */
+const GAME_VERSION='v0.23.5';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
 const APP={salto:{label:'Salto',theme:'salto',color:'#10b981'}, barra:{label:'Barra',theme:'barra',color:'#6366f1'}, viga:{label:'Viga',theme:'viga',color:'#f59e0b'}, piso:{label:'Piso',theme:'piso',color:'#ec4899'}};
 const LEVELS={baby:{label:'Baby Gym',spawnMs:1400,fallMs:5800,target:12}, basico:{label:'Básico',spawnMs:1000,fallMs:3600,target:16}, intermedio:{label:'Intermedio',spawnMs:800,fallMs:2600,target:20}};
 
-/* === Game Design v0.2 ===
-   BPM por aparato/nivel y rutinas ordenadas con beats (1 = un pulso) */
+/* === Game Design v0.3 (estructura lista para ampliación) ===
+   - Ajusta BPM y agrega/edita pasos en 'routines' según tus nuevas destrezas.
+   - beats = duración del paso en pulsos. */
 const GD={
-  version:'0.2',
+  version:'0.3',
   bpm:{
     piso:{baby:84,  basico:92,  intermedio:104},
     viga:{baby:70,  basico:76,  intermedio:84},
     salto:{baby:100, basico:110, intermedio:120},
     barra:{baby:72,  basico:80,  intermedio:88},
+    // TODO: Actualiza si cambian los tempos en v0.3
   },
   routines:{
     piso:{
@@ -269,6 +297,7 @@ const GD={
         {label:'Salto tuck', beats:1},
         {label:'Relevé a pose final', beats:1},
       ],
+      // TODO: Añade/ajusta pasos v0.3 si aplica
     },
     viga:{
       baby:[
@@ -295,6 +324,7 @@ const GD={
         {label:'Relevé largo', beats:2},
         {label:'Dismount con giro', beats:1},
       ],
+      // TODO: Reemplaza con tu v0.3 si cambian los pasos
     },
     salto:{
       baby:[
@@ -315,6 +345,7 @@ const GD={
         {label:'Bloqueo/Repulsión', beats:1},
         {label:'Aterrizaje con stick', beats:1},
       ],
+      // TODO: Ajusta a tu v0.3 si corresponde
     },
     barra:{
       baby:[
@@ -335,6 +366,7 @@ const GD={
         {label:'Cambio de agarre', beats:1},
         {label:'Desmonte con giro', beats:1},
       ],
+      // TODO: Actualiza a v0.3
     }
   }
 };
@@ -352,7 +384,6 @@ let level=LS.get('rf22:lv','baby');
 let running=false, paused=false, ended=false, startTs=null, timeline=0, raf=0;
 let notes=[], hits={perfect:0,good:0,miss:0}, score=0, laneHits=[0,0,0,0];
 let totalTarget=0, spawned=0, processed=0, nextSpawnAt=1400;
-/* Spawn con GD v0.2 */
 let usingGD=false, beatMs=0, stepIdx=0;
 
 /* Anti taps final */
@@ -361,7 +392,7 @@ let resultsUnlockTimer = 0;
 
 /* Refs UI */
 const lanesWrap=el('lanes'), hitline=el('hitline'), progBar=el('progBar'), pausedMask=el('pausedMask'), pauseBox=el('pauseBox'), resumeBtn=el('resumeBtn');
-const scoreEl=el('score'), levelBadge=el('levelBadge'), apparatusLabel=el('apparatusLabel');
+const scoreEl=el('score'), levelBadge=el('levelBadge'), apparatusLabel=el('apparatusLabel'), verBadge=el('verBadge');
 const panel=el('panel'), results=el('results'), rName=el('rName'), rScore=el('rScore'), rPerfect=el('rPerfect'), rGood=el('rGood'), rMiss=el('rMiss'), medalEl=el('medal');
 const startBtn=el('startBtn'), restartBtn=el('restartBtn'), pauseBtn=el('pauseBtn'), muteBtn=el('muteBtn'), muteIcon=el('muteIcon');
 const playAgain=el('playAgain'), nextEvent=el('nextEvent'), toMain=el('toMain'), continueLastBtn=el('continueLast');
@@ -385,9 +416,14 @@ function buildLanes(){
   lanesWrap.innerHTML=''; laneEls.length=0;
   for(let l=0;l<LANES;l++){
     const lane=document.createElement('div'); lane.className='lane';
+    // Etiqueta fija que mostrará el texto de la destreza de ESTA nota
+    const label=document.createElement('div'); label.className='note-label'; label.textContent='';
+    lane.appendChild(label);
+
     const target=document.createElement('button'); target.className='target'; target.type='button'; target.style.bottom=(HIT_Y-18)+'px';
     target.innerHTML=`<b class="laneCount">0</b>`;
     target.addEventListener('pointerdown',e=>{e.preventDefault();target.classList.add('bounce');setTimeout(()=>target.classList.remove('bounce'),180);judge(l);},{passive:false});
+
     lane.appendChild(target); lanesWrap.appendChild(lane); laneEls.push(lane);
   }
   hitline.style.bottom=(LINE_Y-3)+'px';
@@ -400,51 +436,17 @@ function refreshBadges(){apparatusLabel.textContent=APP[apparatus].label;levelBa
 function updateLaneCounters(onlyLane){if(onlyLane===undefined){for(let l=0;l<LANES;l++){const t=laneEls[l]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[l];}}else{const t=laneEls[onlyLane]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[onlyLane];}}
 
 /* Game Design helpers */
-function gdSteps(){
-  const r = GD.routines?.[apparatus]?.[level];
-  return Array.isArray(r) ? r : null;
-}
+function gdSteps(){ const r = GD.routines?.[apparatus]?.[level]; return Array.isArray(r) ? r : null; }
 function hasGD(){ return !!(GD.bpm?.[apparatus]?.[level] && gdSteps()); }
-function computeBeatMs(){
-  const bpm = GD.bpm?.[apparatus]?.[level] || 0;
-  return bpm ? (60000 / bpm) : 0;
-}
+function computeBeatMs(){ const bpm = GD.bpm?.[apparatus]?.[level] || 0; return bpm ? (60000 / bpm) : 0; }
 
 /* Rutina activa y metas */
 function currentMoves(){
-  // Para UI/compat: devuelve labels de la rutina si existe, si no el fallback viejo
   const steps = gdSteps();
   if(steps) return steps.map(s=>s.label);
-  // Fallback legacy (no debería usarse cuando hay GD)
-  const MOVES_FALLBACK={
-    piso:{
-      baby:['Rodada al frente','Salto estirado','Estrella'],
-      basico:['Rodada al frente','Salto estirado','Pivote en relevé con manos en cintura','Estrella'],
-      intermedio:['Rodada al frente','Rodada atrás','Estrella','Sostener velita (3 seg)','Sostener mesita (3 seg)','Sostener hollow (3 seg)','Girar a sostener arco (3 seg)','Push up a tuck y pararse','2 patadas al frente','2 coupé','Salto tuck','Relevé a pose final']
-    },
-    viga:{
-      baby:['Subida segura','Paso lateral','Relevé','Balance T','Giro 1/4','Desmonte abajo'],
-      basico:['Montada frontal','Passe','Pivot 1/2','Scale','Dip','Desmonte'],
-      intermedio:['Montada salto','Pivot 1/1','Cartwheel','Serie equilibrio','Relevé largo','Dismount con giro']
-    },
-    salto:{
-      baby:['Carrera suave','Tabla manos','Bote ligero','Aterrizaje con stick'],
-      basico:['Carrera','Preflight','Repulsión','Aterrizaje controlado'],
-      intermedio:['Carrera rápida','Preflight potente','Bloqueo/Repulsión','Aterrizaje con stick']
-    },
-    barra:{
-      baby:['Colgante','Balanceo suave','Apoyo codo','Bajarse seguro'],
-      basico:['Pullover','Cast pequeño','Tap swing','Desmonte básico'],
-      intermedio:['Cast medio','Tap swing alto','Cambio de agarre','Desmonte con giro']
-    }
-  };
-  return (MOVES_FALLBACK[apparatus]&&MOVES_FALLBACK[apparatus][level])?MOVES_FALLBACK[apparatus][level]:[];
+  return []; // en v0.3 usamos GD; si no hay, quedará vacío (fallback no estrictamente necesario)
 }
-function computeTarget(){
-  const steps = gdSteps();
-  if(steps) return steps.length;
-  return LEVELS[level].target;
-}
+function computeTarget(){ const steps = gdSteps(); return steps ? steps.length : LEVELS[level].target; }
 
 /* Progreso */
 function updateProgressBar(){
@@ -454,6 +456,7 @@ function updateProgressBar(){
 
 /* UI init */
 function initUI(){
+  verBadge.textContent = GAME_VERSION;
   nameInput.value=LS.get('rf22:name','Gimnasta');
   qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));
   qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));
@@ -481,7 +484,7 @@ if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local 
   }catch(_){}
 })();
 
-/* Notas — ordenadas según GD si existe; 1 nota por paso (beats define el intervalo antes del siguiente paso) */
+/* Notas — orden según GD; 1 nota por paso. La etiqueta de carril muestra SIEMPRE el texto del próximo paso EN ESE CARRIL. */
 function genNextNote(timeBase){
   if(spawned>=totalTarget) return [];
   const steps = gdSteps();
@@ -489,18 +492,19 @@ function genNextNote(timeBase){
   if(usingGD && steps){
     const step = steps[stepIdx] || steps[steps.length-1];
     label = step.label;
-  }else{
-    const moves=currentMoves();
-    label = moves.length ? moves[(spawned)%moves.length] : 'Nota';
   }
   const lane=Math.floor(Math.random()*LANES);
   const id=(spawned+1);
   spawned++;
-  if(usingGD && steps){
-    stepIdx = Math.min(stepIdx+1, steps.length); // avanza secuencia
-  }
+  if(usingGD && steps){ stepIdx = Math.min(stepIdx+1, steps.length); }
+
+  // Actualiza la etiqueta fija del carril con el texto de ESTA nota
+  const laneLabel = laneEls[lane]?.querySelector('.note-label');
+  if(laneLabel) laneLabel.textContent = label;
+
   return [{id,time:timeBase,lane,label,hit:false,el:null}];
 }
+
 function fallMsNow(){
   const base=LEVELS[level].fallMs;
   const p=totalTarget?Math.min(1,processed/totalTarget):0;
@@ -511,7 +515,14 @@ function noteY(n,now){
   const k=(now-t0)/fallMsNow();
   return HIT_Y + (1-k)*LANE_SPAN;
 }
-function purgeNotesDOM(){qsa('.note').forEach(x=>x.remove());for(const n of notes){if(n.el){try{n.el.remove()}catch(_){}}}notes=[];}
+function purgeNotesDOM(){
+  qsa('.note').forEach(x=>x.remove());
+  // No borramos .note-label fijos aquí (pertenecen al carril); se vacían cuando corresponde.
+  for(const n of notes){
+    if(n.el){try{n.el.remove()}catch(_){}}
+  }
+  notes=[];
+}
 
 /* Loop */
 function loop(ts){
@@ -554,9 +565,14 @@ function startGame(){
   totalTarget = computeTarget(); spawned=0; processed=0;
   if(usingGD){
     const firstBeats = Math.max(1, (gdSteps()?.[0]?.beats || 1));
-    nextSpawnAt = firstBeats * beatMs; // primera nota tras 1 paso de compás
+    nextSpawnAt = firstBeats * beatMs;
   }else{
     nextSpawnAt = LEVELS[level].spawnMs;
+  }
+
+  // Limpia las etiquetas de carril al iniciar
+  for(const lane of laneEls){
+    const lbl = lane.querySelector('.note-label'); if(lbl) lbl.textContent='';
   }
 
   updateProgressBar();
@@ -578,6 +594,11 @@ function endGame(){
   rName.textContent=nameInput.value||'Gimnasta';
   rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
 
+  // Vacía etiquetas de carril al terminar
+  for(const lane of laneEls){
+    const lbl = lane.querySelector('.note-label'); if(lbl) lbl.textContent='';
+  }
+
   results.style.display='flex';
   results.classList.add('locked');
   [playAgain,nextEvent,toMain].forEach(b=>b.disabled=true);
@@ -598,13 +619,14 @@ function updateNotes(){
   for(const n of notes){
     const y = noteY(n, now);
     if(!n.hit && y <= MISS_LINE_Y){
-      n.hit=true; processed++; if(n.el){n.el.remove(); n.el=null;}
+      n.hit=true; processed++;
+      if(n.el){n.el.remove(); n.el=null;}
       hits.miss++; flashLine('miss'); floatText(n.lane,'Miss','miss'); SFX.miss(); buzz(40);
       updateHUD(); updateProgressBar(); continue;
     }
     if(!n.hit){
       if(!n.el){
-        const b=document.createElement('div'); b.className='note '+APP[apparatus].theme; b.textContent=n.label;
+        const b=document.createElement('div'); b.className='note '+APP[apparatus].theme; b.textContent='';
         b.addEventListener('pointerdown',e=>{e.preventDefault();judge(n.lane);},{passive:false});
         laneEls[n.lane].appendChild(b); n.el=b;
       }
@@ -622,10 +644,20 @@ function judge(lane){
   if(!cand) return;
   const {n,y}=cand, dy=Math.abs(y-LINE_Y);
   if(dy>GOOD_RADIUS) return;
-  n.hit=true; processed++; if(n.el){n.el.remove(); n.el=null;}
+
+  n.hit=true; processed++;
+  if(n.el){n.el.remove(); n.el=null;}
+
   const kind=(dy<=PERFECT_RADIUS)?'perfect':'good';
   if(kind==='perfect'){hits.perfect++;score+=100;SFX.perfect();buzz(18);}else{hits.good++;score+=60;SFX.good();buzz(12);}
   laneHits[lane]++; updateLaneCounters(lane); flashLine(kind); floatText(lane, kind==='perfect'?'Perfect +100':'Good +60', kind); updateHUD(); updateProgressBar();
+
+  // Al acertar, limpia la etiqueta del carril SOLO si no hay otra nota pendiente que ya haya puesto etiqueta
+  // (para simplicidad, la próxima nota que spawnee volverá a escribir la etiqueta).
+  const hasFutureOnLane = notes.some(x=>!x.hit && x.lane===lane && x.el);
+  if(!hasFutureOnLane){
+    const lbl = laneEls[lane]?.querySelector('.note-label'); if(lbl) lbl.textContent='';
+  }
 }
 
 /* Feedback línea */
@@ -650,7 +682,7 @@ function saveLastRun(){LS.set('rf22:last:run',{when:Date.now(),apparatus,level,s
 function restoreLastRun(){const r=LS.get('rf22:last:run',null);if(!r)return false;apparatus=r.apparatus||apparatus;level=r.level||level;return true;}
 
 /* Navegación */
-function nextApparatus(){const idx=ORDER.indexOf(apparatus);apparatus=ORDER[(idx+1)%ORDER.length];LS.set('rf22:ap',aparatus);refreshBadges();}
+function nextApparatus(){const idx=ORDER.indexOf(apparatus);apparatus=ORDER[(idx+1)%ORDER.length];LS.set('rf22:ap', apparatus);refreshBadges();}
 function goToMain(){results.style.display='none';panel.style.display='';score=0;hits={perfect:0,good:0,miss:0};updateHUD();}
 
 /* Listeners UI */
