@@ -1,17 +1,12 @@
 🏅 Routines Flow (nombre del juego)
-
-Versión: v0.23.6
-
+Versión: v0.24.1
 Estado: Estable — Pre-lanzamiento interno
-
 Desarrollado para: Turabo Gymnastics Center (TGC)
-
 Autor: Axel Maldonado — Proyecto TGC Games
-
 Fecha: 2025-10-19
 
-Cambios clave:
-- Integrado RFRoutines v0.3 (Oficial TGC · piloto, con submovimientos).
-- El motor toma BPM/orden desde RFRoutines y calcula beats por destreza según submovs.
-- Se mantiene: etiqueta fija arriba del carril, nota vacía, anti-taps final, ranking local, teclado 1–4.
-========================================
+Cambios clave v0.24.1:
+- 🖐️ Iconos de acción por nota (tap/hold/swipe/multi xN).
+- ⏳ Hold visual: barra de progreso integrada en la nota.
+- 🏷️ Submovimientos visibles bajo la etiqueta de destreza.
+- 🔎 Etiquetas de destrezas más visibles (tamaño, borde por aparato, sombra).
