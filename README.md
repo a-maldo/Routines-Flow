@@ -1,4 +1,3 @@
-========================================
 🏅 Routines Flow (nombre del juego)
 Versión: v0.23.5.2
 Estado: Estable — Pre-lanzamiento interno
@@ -15,4 +14,3 @@ Notas de esta versión (v0.23.5.2):
 - 🏷️ Etiqueta de destreza fija arriba del carril; la nota desciende vacía.
 - 🔖 Badge con número de versión visible en la topbar.
 - ✅ Se mantienen: input legible, anti-taps (450ms), tempo por beats, teclado 1–4, URL params, ranking local.
-========================================
