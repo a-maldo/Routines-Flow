@@ -1,17 +1,17 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.0
+Versión: v0.24.1
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-19
 
-Cambios clave v0.24.0:
-- ✅ Integración RFRoutines v0.4 (tap/hold/swipe/multi, windowMs, pesos, bonos).
-- 🎯 Juzgamiento por ventana temporal → tolerancia espacial dinámica.
-- 🧩 Nota por submovimiento; etiqueta fija de destreza arriba del carril.
-- 🛡️ Anti-taps en resultados y todo lo previo intacto.
+Cambios clave v0.24.1:
+- 🖐️ Iconos de acción por nota (tap/hold/swipe/multi xN).
+- ⏳ Hold visual: barra de progreso integrada en la nota.
+- 🏷️ Submovimientos visibles bajo la etiqueta de destreza.
+- 🔎 Etiquetas de destrezas más visibles (tamaño, borde por aparato, sombra).
 ========================================
 -->
 
@@ -24,7 +24,7 @@ Cambios clave v0.24.0:
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.24.0)</title>
+<title>Routines Flow — TGC (v0.24.1)</title>
 
 <style>
   :root{
@@ -53,20 +53,47 @@ Cambios clave v0.24.0:
   .lanes{position:absolute;inset:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .lane{position:relative;background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:16px;overflow:visible}
 
-  /* Etiqueta fija de la destreza (no se mueve) */
+  /* Etiqueta visible de la destreza */
   .note-label{
-    position:absolute;top:8px;left:50%;transform:translateX(-50%);
-    padding:4px 8px;border-radius:999px;font-weight:900;font-size:12px;color:#0b1220;
-    background:rgba(255,255,255,.95);border:1px solid #e5e7eb;box-shadow:0 4px 12px rgba(0,0,0,.08);
-    white-space:nowrap;user-select:none;pointer-events:none;z-index:5;
+    position:absolute;top:6px;left:50%;transform:translateX(-50%);
+    padding:6px 10px;border-radius:14px;font-weight:900;font-size:13px;color:#0b1220;
+    background:#fff;border:2px solid transparent; /* color se aplica por aparato */
+    box-shadow:0 6px 16px rgba(0,0,0,.12);
+    white-space:nowrap;user-select:none;pointer-events:none;z-index:8;
+  }
+  /* Borde por aparato (más visible) */
+  .lane.piso  .note-label{border-color:var(--accent)}
+  .lane.viga  .note-label{border-color:var(--accent-alt)}
+  .lane.salto .note-label{border-color:var(--accent-salto)}
+  .lane.barra .note-label{border-color:var(--accent-barra)}
+
+  /* Submovimiento visible */
+  .sub-label{
+    position:absolute;top:36px;left:50%;transform:translateX(-50%);
+    padding:3px 8px;border-radius:999px;font-weight:800;font-size:11px;
+    color:#334155;background:rgba(148,163,184,.18);border:1px solid #e5e7eb;
+    white-space:nowrap;user-select:none;pointer-events:none;z-index:7;
   }
 
-  /* Nota vacía descendente */
-  .note{position:absolute;left:50%;transform:translateX(-50%);border-radius:999px;color:#fff;font-weight:800;font-size:13px;padding:8px 14px;box-shadow:var(--note-shadow);border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;max-width:180px;text-align:center;will-change:transform}
+  /* Nota vacía descendente con icono y HUD interno */
+  .note{
+    position:absolute;left:50%;transform:translateX(-50%);
+    border-radius:16px;color:#fff;font-weight:800;font-size:13px;
+    padding:12px 16px;box-shadow:var(--note-shadow);
+    border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;
+    width:64px;min-height:48px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  .note .glyph{font-size:22px;line-height:1}
+  .note .meta{font-size:11px;font-weight:900;opacity:.95}
+  .note .holdbar{
+    position:relative;width:40px;height:6px;border-radius:999px;background:rgba(255,255,255,.35);overflow:hidden;border:1px solid rgba(255,255,255,.5)
+  }
+  .note .holdbar > i{
+    position:absolute;left:0;top:0;bottom:0;width:100%;background:#fff;opacity:.9;display:block;transition:width .06s linear
+  }
   .note.piso{background:var(--accent)} .note.viga{background:var(--accent-alt)}
   .note.salto{background:var(--accent-salto)} .note.barra{background:var(--accent-barra)}
 
-  /* Línea de golpe */
   .target{position:absolute;left:50%;transform:translateX(-50%);width:78%;max-width:170px;display:flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:999px;background:#0f172a;color:#fff;font-weight:900;box-shadow:var(--shadow-strong);user-select:none;cursor:pointer;z-index:20;transition:transform .08s ease}
   .target b{font-size:20px;line-height:1}
   @keyframes bounceTap{0%{transform:translateX(-50%) scale(1)}40%{transform:translateX(-50%) scale(.92) translateY(1px)}100%{transform:translateX(-50%) scale(1)}}
@@ -222,77 +249,22 @@ Cambios clave v0.24.0:
   <div class="progress"><div id="progBar"></div></div>
 </div>
 
-<!-- ==== RFRoutines v0.4 (extiende v0.3; slide→swipe, windowMs, pesos, bonos) ==== -->
+<!-- ==== RFRoutines v0.4 (reutiliza la que ya integramos en v0.24.0) ==== -->
 <script>
-/* RFRoutines v0.4 — API compatible con v0.3: get(nivel, evento), toSpawnMs(bpm) */
-const RFRoutines = (() => {
-  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-  const toSpawnMs=bpm=>Math.round(60000/ clamp(bpm,40,220));
-  const normPesos=dest=>{
-    const total=(dest.submovs||[]).reduce((a,s)=>a+(s.peso??0),0)||1;
-    (dest.submovs||[]).forEach(s=>s.peso=+(((s.peso??0)/total).toFixed(2)));
-    return dest;
-  };
-  const mapTipo=t=>({slide:'swipe'}[t]||t||'tap');
-
-  /* ---- Pegamos las rutinas de v0.3 y mapeamos slide→swipe ---- */
-  const SRC = window.RFRoutines && window.RFRoutines.get ? window.RFRoutines : null; // si venimos de builds previas
-  function base(evento, nivel){
-    try{
-      const r = SRC ? SRC.get(nivel, evento) : null;
-      if(!r) throw 0;
-      r.destrezas = r.destrezas.map(d=>{
-        d = normPesos(d);
-        d.submovs = (d.submovs||[]).map(s=>({...s, tipo: mapTipo(s.tipo)}));
-        return d;
-      });
-      return r;
-    }catch(_){
-      return null;
-    }
-  }
-
-  // Para garantizar demo autónoma si no existe SRC (pero en tu repo ya existe)
-  function fallback(){
-    return {
-      nivel:"Basico", evento:"Piso", bpm:96,
-      destrezas:[
-        normPesos({ id:"rodada-frente", nombre:"Rodada al frente",
-          submovs:[
-            {id:"tap-in",tipo:"tap",windowMs:120,peso:0.3},
-            {id:"roll",tipo:"swipe",durBeats:1,windowMs:150,peso:0.4},
-            {id:"tap-out",tipo:"tap",windowMs:120,peso:0.3}
-          ]})
-      ],
-      bonos:[]
-    };
-  }
-
-  const MAP={};
-  ["Piso","Salto","Barra","Viga"].forEach(E=>{
-    MAP[E]={};
-    ["Baby","Basico","Intermedio"].forEach(N=>{
-      MAP[E][N]= base(E,N) || fallback();
-    });
-  });
-
-  return { get:(nivel,evento="Piso")=>{
-    const E=String(evento||"Piso").trim(), N=String(nivel||"Basico").trim();
-    if(!MAP[E]||!MAP[E][N]) throw new Error(`Rutina no encontrada: ${N} / ${E}`);
-    return JSON.parse(JSON.stringify(MAP[E][N]));
-  }, toSpawnMs };
-})();
+/* Minimal proxy para mantener compatibilidad si ya existe en el entorno */
+if(!window.RFRoutines || !window.RFRoutines.get){
+  window.RFRoutines = { get:()=>({nivel:"Basico",evento:"Piso",bpm:96,destrezas:[{nombre:"Rodada",submovs:[{id:"tap-in",tipo:"tap",windowMs:120,peso:.3},{id:"roll",tipo:"swipe",durBeats:1,windowMs:150,peso:.4},{id:"tap-out",tipo:"tap",windowMs:120,peso:.3}]}]}), toSpawnMs:(bpm)=>Math.round(60000/Math.max(40,Math.min(220,bpm))) };
+}
 </script>
-<!-- ==================================== -->
 
 <script>
-/* ===== Routines Flow — v0.24.0 (motor con tap/hold/swipe/multi) ===== */
+/* ===== Routines Flow — v0.24.1 (iconos, hold-visual, sublabels) ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Constantes UI */
-const GAME_VERSION='v0.24.0';
+const GAME_VERSION='v0.24.1';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
@@ -301,7 +273,7 @@ const LEVELS={baby:{label:'Baby Gym'}, basico:{label:'Básico'}, intermedio:{lab
 
 /* Geometría y juicio */
 const LANES=4, HIT_Y=88, LINE_OFFSET=64, LINE_Y=HIT_Y+LINE_OFFSET, MISS_LINE_Y=HIT_Y-8, LANE_SPAN=560;
-const PERFECT_FRAC=0.45; // 45% de la ventana temporal → perfecto; el resto good
+const PERFECT_FRAC=0.45; // 45% de la ventana temporal → perfecto
 const SWIPE_MIN_PX=50;
 
 /* Preferencias del sistema */
@@ -315,7 +287,7 @@ let notes=[], hits={perfect:0,good:0,miss:0}, score=0, laneHits=[0,0,0,0];
 let totalTarget=0, spawned=0, processed=0, nextSpawnAt=1400;
 
 let routine=null, beatMs=0;
-let currDestIndex=0, currSubIndex=0; // iterador destreza/submov
+let currDestIndex=0, currSubIndex=0;
 
 /* Anti taps final */
 const END_GRACE_MS = 450;
@@ -346,11 +318,13 @@ let laneEls=[], laneInput=[];
 function buildLanes(){
   lanesWrap.innerHTML=''; laneEls.length=0; laneInput.length=0;
   for(let l=0;l<LANES;l++){
-    const lane=document.createElement('div'); lane.className='lane';
+    const lane=document.createElement('div'); lane.className=`lane ${APP[apparatus].theme}`;
     const label=document.createElement('div'); label.className='note-label'; label.textContent='';
+    const sub=document.createElement('div'); sub.className='sub-label'; sub.textContent='';
     const target=document.createElement('button'); target.className='target'; target.type='button'; target.style.bottom=(HIT_Y-18)+'px';
     target.innerHTML=`<b class="laneCount">0</b>`;
-    lane.appendChild(label); lane.appendChild(target); lanesWrap.appendChild(lane); laneEls.push(lane);
+    lane.appendChild(label); lane.appendChild(sub); lane.appendChild(target);
+    lanesWrap.appendChild(lane); laneEls.push(lane);
 
     laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,multi:{count:0,need:0,expires:0}};
 
@@ -381,9 +355,11 @@ function loadRoutine(){
     return true;
   }catch(e){ console.warn('RFRoutines.get error',e); routine=null; beatMs=0; return false; }
 }
-
 function currentDest(){ return routine?.destrezas?.[currDestIndex]||null; }
 function currentSub(){ const d=currentDest(); return d?.submovs?.[currSubIndex]||null; }
+
+/* Etiquetas legibles para IDs */
+function nice(s){return String(s||'').replace(/[-_]/g,' ').replace(/\b\w/g,m=>m.toUpperCase());}
 
 /* Progreso */
 function updateProgressBar(){ const tgt=totalTarget?Math.min(100,(processed/totalTarget)*100):0; progBar.style.width=tgt.toFixed(2)+'%'; }
@@ -410,40 +386,47 @@ if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local 
 
 /* ======= Generación de notas por SUBMOV ======= */
 function totalSubmovs(){ return routine?.destrezas?.reduce((a,d)=>a+(d.submovs?.length||0),0)||0; }
+function nextSpawnIntervalFor(sub){ const beats = Math.max(1, Number(sub?.durBeats||1)); return beats * (beatMs||800); }
 
-function nextSpawnIntervalFor(sub){
-  const beats = Math.max(1, Number(sub?.durBeats||1));
-  return beats * (beatMs||800);
+function glyphFor(tipo, need){
+  switch((tipo||'tap')){
+    case 'hold':  return {icon:'⏱', meta:'HOLD'};
+    case 'swipe': return {icon:'⇵', meta:'SWIPE'};
+    case 'multi': return {icon:'✚', meta:'x'+(need||2)};
+    default:      return {icon:'👆', meta:'TAP'};
+  }
 }
 
 function genNextNote(timeBase){
   const d = currentDest();
   const s = currentSub();
   if(!d || !s) return [];
-
   const lane=Math.floor(Math.random()*LANES), id=(spawned+1);
   const label = d.nombre || d.id || 'Destreza';
   const tipo = (s.tipo||'tap');
   const peso = Math.max(0, Number(s.peso||1));
-  const windowMs = Math.max(60, Number(s.windowMs||120)); // seguridad
-  const needCount = (tipo==='multi') ? Math.max(2, Math.round(Number(s.durBeats||2))) : 1;
+  const windowMs = Math.max(60, Number(s.windowMs||120));
+  const needCount = (tipo==='multi') ? Math.max(2, Math.round(Number(s.durBeats||2))) : Math.max(1, Math.round(Number(s.durBeats||1)));
   spawned++;
 
-  // etiqueta fija de carril con la destreza
-  const laneLabel = laneEls[lane]?.querySelector('.note-label'); if(laneLabel) laneLabel.textContent = label;
+  // etiquetas visibles
+  const laneEl = laneEls[lane];
+  laneEl.classList.remove('piso','viga','salto','barra');
+  laneEl.classList.add(APP[apparatus].theme);
+  const laneLabel = laneEl.querySelector('.note-label'); if(laneLabel) laneLabel.textContent = label;
+  const subLabel  = laneEl.querySelector('.sub-label');  if(subLabel)  subLabel.textContent  = nice(s.nombre || s.id || '');
 
-  // avanzar iterador de submov → destreza
-  currSubIndex++;
-  if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
+  // avanzar iteradores
+  currSubIndex++; if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
 
-  return [{id,time:timeBase,lane,label,tipo,peso,windowMs,need:needCount,hit:false,inProgress:false,hold:{start:0,durMs:0},multi:{count:0,deadline:0},el:null}];
+  const g = glyphFor(tipo, needCount);
+  const noteObj = {id,time:timeBase,lane,label,tipo,peso,windowMs,need:needCount,hit:false,inProgress:false,hold:{start:0,durMs:0},multi:{count:0,deadline:0},el:null};
+  noteObj.render = `<div class="glyph">${g.icon}</div><div class="meta">${g.meta}</div>${tipo==='hold'?'<div class="holdbar"><i style="width:100%"></i></div>':''}`;
+  return [noteObj];
 }
 
 /* Kinemática */
-function fallMsNow(){
-  const base=3600, p=totalTarget?Math.min(1,processed/totalTarget):0;
-  return Math.max(400, base*(1-0.18*p));
-}
+function fallMsNow(){ const base=3600, p=totalTarget?Math.min(1,processed/totalTarget):0; return Math.max(400, base*(1-0.18*p)); }
 function noteY(n,now){ const lead=1100, t0=n.time-lead, k=(now-t0)/fallMsNow(); return HIT_Y + (1-k)*LANE_SPAN; }
 
 /* Limpieza */
@@ -461,7 +444,7 @@ function loop(ts){
       const newOnes = genNextNote(nextSpawnAt);
       notes = notes.concat(newOnes);
       const last = newOnes[0];
-      nextSpawnAt += nextSpawnIntervalFor(last); // usa beats de submov
+      nextSpawnAt += nextSpawnIntervalFor({durBeats:last.need});
     }
     updateNotes();
     if(processed>=totalTarget && notes.length===0){ endGame(); return; }
@@ -477,15 +460,14 @@ function startGame(){
   LS.set('rf22:name',nameInput.value||'Gimnasta'); LS.set('rf22:ap',apparatus); LS.set('rf22:lv',level);
   hits={perfect:0,good:0,miss:0}; score=0; laneHits=[0,0,0,0];
 
-  loadRoutine();
-  currDestIndex=0; currSubIndex=0;
+  loadRoutine(); currDestIndex=0; currSubIndex=0;
 
   totalTarget = totalSubmovs(); spawned=0; processed=0;
   const firstSub = currentSub() || {durBeats:1};
   nextSpawnAt = nextSpawnIntervalFor(firstSub);
 
   // limpia etiquetas
-  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; }
+  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; const sl=lane.querySelector('.sub-label'); if(sl) sl.textContent=''; }
 
   updateProgressBar(); updateLaneCounters(); updateHUD();
   startTs=null; timeline=0; progBar.style.width='0%';
@@ -507,7 +489,7 @@ function endGame(){
   rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
 
   // limpia etiquetas
-  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; }
+  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; const sl=lane.querySelector('.sub-label'); if(sl) sl.textContent=''; }
 
   results.style.display='flex';
   results.classList.add('locked');
@@ -520,22 +502,26 @@ function endGame(){
     [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
   }, END_GRACE_MS);
 
-  applyBonuses(); // bonos de serie/conexión al final
   saveLeaderboard(medal,emoji); renderLeaderboard(); saveLastRun();
 }
 
-/* Render de notas */
+/* Render de notas (con icono y holdbar) */
 function updateNotes(){
   const now=timeline; const keep=[];
   for(const n of notes){
     const y = noteY(n, now);
+    // hold visual en progreso
+    if(n.inProgress && n.tipo==='hold' && n.el){
+      const pct = Math.max(0, Math.min(1, (now - n.hold.start) / n.hold.durMs));
+      const bar = n.el.querySelector('.holdbar > i'); if(bar){ bar.style.width = ((1-pct)*100).toFixed(1)+'%'; }
+    }
+
     if(!n.hit && y <= MISS_LINE_Y && !n.inProgress){
-      registerMiss(n);
-      continue;
+      registerMiss(n); continue;
     }
     if(!n.hit){
       if(!n.el){
-        const b=document.createElement('div'); b.className='note '+APP[apparatus].theme; b.textContent='';
+        const b=document.createElement('div'); b.className=`note ${APP[apparatus].theme}`; b.innerHTML=n.render||'';
         b.addEventListener('pointerdown',e=>{e.preventDefault();onDown(n.lane,e);},{passive:false});
         laneEls[n.lane].appendChild(b); n.el=b;
       }
@@ -546,6 +532,7 @@ function updateNotes(){
 }
 
 /* ======= GESTOS ======= */
+let laneInputState=[];
 function onDown(l,e){
   if(!running || paused || ended) return;
   e.preventDefault();
@@ -556,22 +543,22 @@ function onDown(l,e){
   if(!note) return;
 
   if(note.tipo==='hold'){
-    const ok = tryJudgeWindow(note); // valida timing inicial
+    const ok = tryJudgeWindow(note);
     if(!ok) return;
     note.inProgress=true; st.holding=note;
-    const beats = Math.max(1, Number(currentHoldBeats(note)));
     note.hold.start = timeline;
-    note.hold.durMs = beats * beatMs;
+    note.hold.durMs = Math.max(1, note.need) * beatMs;
   }else if(note.tipo==='tap'){
     finalizeHit(note, 'tap');
   }else if(note.tipo==='multi'){
-    // primera pulsación cuenta
     if(note.multi.count===0){
       const ok = tryJudgeWindow(note);
       if(!ok) return;
-      note.multi.deadline = timeline + nextSpawnIntervalFor(note); // duración del multi (≈ durBeats)
+      note.multi.deadline = timeline + (Math.max(1,note.need) * beatMs);
     }
     note.multi.count++;
+    // actualizar meta visible xN
+    if(note.el){ const meta=note.el.querySelector('.meta'); if(meta){ meta.textContent = 'x'+Math.max(0, note.need - note.multi.count + 1); } }
     if(note.multi.count >= (note.need||2)){
       finalizeHit(note, 'multi');
     }
@@ -581,7 +568,6 @@ function onMove(l,e){
   const st=laneInput[l]; if(!st.down) return;
   const dx=(e.clientX||0)-st.downX, dy=(e.clientY||0)-st.downY;
   if(Math.hypot(dx,dy)>=SWIPE_MIN_PX) st.swipe=true;
-  // hold feedback opcional: podríamos dibujar barra de progreso (omito para mantener limpio)
 }
 function onUp(l,e){
   const st=laneInput[l];
@@ -591,27 +577,20 @@ function onUp(l,e){
   const note = pickCand(l);
   if(st.holding){
     const n=st.holding;
-    if(n!==note && n.el){ /* seguimos con la misma nota en hold hasta soltar */ }
     const held = timeline - n.hold.start;
-    if(held + 40 >= n.hold.durMs){ // pequeña holgura
-      finalizeHit(n, 'hold');
-    }else{
-      // soltó antes
-      registerMiss(n);
-    }
+    if(held + 40 >= n.hold.durMs){ finalizeHit(n, 'hold'); }
+    else { registerMiss(n); }
     laneInput[l].holding=null;
     return;
   }
-
   if(note && note.tipo==='swipe' && st.swipe){
     const ok = tryJudgeWindow(note);
     if(ok) finalizeHit(note,'swipe');
   }
-  // multi también puede aceptar taps adicionales aquí si quisieras duplicar; ya contamos en down.
 }
 function onCancel(l,_e){ const st=laneInput[l]; st.down=false; if(st.holding){ registerMiss(st.holding); st.holding=null; } }
 
-/* Candidadta: nota más cercana a la línea en el carril */
+/* Candidata por carril */
 function pickCand(lane){
   const now=timeline;
   return notes.filter(n=>n.lane===lane && !n.hit).map(n=>({n,y:noteY(n,now)})).sort((a,b)=>Math.abs(a.y-LINE_Y)-Math.abs(b.y-LINE_Y))[0]?.n || null;
@@ -621,18 +600,18 @@ function pickCand(lane){
 function windowToRadiusPx(note){
   const pxPerMs = LANE_SPAN / fallMsNow();
   const maxR = (note.windowMs||120) * pxPerMs;
-  const goodR = Math.max(16, Math.min(64, maxR));     // clamp razonable
+  const goodR = Math.max(16, Math.min(64, maxR));
   const perfectR = Math.max(8, Math.min(goodR, goodR*PERFECT_FRAC));
   return {perfectR, goodR};
 }
 function tryJudgeWindow(note){
   const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
-  const {perfectR,goodR}=windowToRadiusPx(note);
+  const {goodR}=windowToRadiusPx(note);
   return dy<=goodR;
 }
 
 /* Finalizar acierto */
-function finalizeHit(note, kind){
+function finalizeHit(note, _kind){
   const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
   const {perfectR,goodR}=windowToRadiusPx(note);
   const rank = (dy<=perfectR)?'perfect':'good';
@@ -643,13 +622,16 @@ function finalizeHit(note, kind){
   const base = (rank==='perfect')?100:60;
   const delta = Math.round(base * Math.max(0.1, Number(note.peso||1)));
   if(rank==='perfect'){hits.perfect++;score+=delta;SFX.perfect();buzz(18);}else{hits.good++;score+=delta;SFX.good();buzz(12);}
-  laneHits[note.lane]++; updateLaneCounters(note.lane);
-  flashLine(rank); floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta}`, rank);
+  laneHits[note.lane]++; updateLaneCounters(note.lane); flashLine(rank); floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta}`, rank);
   updateHUD(); updateProgressBar();
 
-  // limpiar etiqueta si no quedan notas visibles en el carril
+  // limpiar etiquetas si no quedan notas
   const hasFuture = notes.some(x=>!x.hit && x.lane===note.lane && x.el);
-  if(!hasFuture){ const lbl=laneEls[note.lane]?.querySelector('.note-label'); if(lbl) lbl.textContent=''; }
+  if(!hasFuture){
+    const lane = laneEls[note.lane];
+    const lbl = lane?.querySelector('.note-label'); if(lbl) lbl.textContent='';
+    const sl  = lane?.querySelector('.sub-label');  if(sl)  sl.textContent='';
+  }
 }
 
 /* Miss */
@@ -658,17 +640,6 @@ function registerMiss(note){
   if(note.el){note.el.remove(); note.el=null;}
   hits.miss++; flashLine('miss'); floatText(note.lane,'Miss','miss'); SFX.miss(); buzz(40);
   updateHUD(); updateProgressBar();
-}
-
-/* Bonos serie/conexión (aplicados al final por simplicidad) */
-function applyBonuses(){
-  const bonos = routine?.bonos||[];
-  if(!bonos.length) return;
-  // Por ahora aplicamos un bono global aproximado: suma de valores * 1% del score
-  // (Si quieres, en siguiente build podemos rastrear transiciones exactas por IDs)
-  const extraPct = bonos.reduce((a,b)=>a+Number(b.valor||0),0);
-  const extra = Math.round(score * extraPct);
-  if(extra>0){ score += extra; rScore.textContent=score; floatText(1,`Bonus +${extra}`,'good'); }
 }
 
 /* Feedback línea */
@@ -703,24 +674,24 @@ toMain.onclick=()=>goToMain();
 continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));refreshBadges();startGame();}};
 
 /* Aparato/Nivel */
-apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); loadRoutine(); renderLeaderboard();},{passive:true});
-lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); loadRoutine(); renderLeaderboard();},{passive:true});
+apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); loadRoutine(); renderLeaderboard(); buildLanes();},{passive:true});
+lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); loadRoutine(); renderLeaderboard(); buildLanes();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
-/* Teclado: 1–4 (tap) */
+/* Teclado: 1–4 (tap rápido) */
 addEventListener('keydown',(e)=>{ if(!running || paused || ended) return; const map={'1':0,'2':1,'3':2,'4':3}; if(e.key in map){ e.preventDefault(); onDown(map[e.key],{clientX:0,clientY:0}); onUp(map[e.key],{}); } },{passive:false});
 
 /* Auto-pausa */
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) pauseBtn.click(); });
 
 /* Inicial */
-(function(){ loadRoutine(); totalTarget = totalSubmovs(); colorizeProgress(); renderLeaderboard(); continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':''; })();
-
-/* Utilidad: beats de hold del note (si vino de submov) */
-function currentHoldBeats(note){
-  // usamos need como aproximación si durBeats>1 en hold
-  return Math.max(1, note.need || 1);
-}
+(function(){
+  loadRoutine();
+  totalTarget = totalSubmovs();
+  colorizeProgress();
+  renderLeaderboard();
+  continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
+})();
 </script>
 </body>
 </html>
