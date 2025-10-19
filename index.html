@@ -1,16 +1,17 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.23.6
+Versión: v0.24.0
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-19
 
-Cambios clave:
-- Integrado RFRoutines v0.3 (Oficial TGC · piloto, con submovimientos).
-- El motor toma BPM/orden desde RFRoutines y calcula beats por destreza según submovs.
-- Se mantiene: etiqueta fija arriba del carril, nota vacía, anti-taps final, ranking local, teclado 1–4.
+Cambios clave v0.24.0:
+- ✅ Integración RFRoutines v0.4 (tap/hold/swipe/multi, windowMs, pesos, bonos).
+- 🎯 Juzgamiento por ventana temporal → tolerancia espacial dinámica.
+- 🧩 Nota por submovimiento; etiqueta fija de destreza arriba del carril.
+- 🛡️ Anti-taps en resultados y todo lo previo intacto.
 ========================================
 -->
 
@@ -23,7 +24,7 @@ Cambios clave:
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.23.6)</title>
+<title>Routines Flow — TGC (v0.24.0)</title>
 
 <style>
   :root{
@@ -52,30 +53,20 @@ Cambios clave:
   .lanes{position:absolute;inset:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .lane{position:relative;background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:16px;overflow:visible}
 
-  /* Etiqueta fija arriba del carril (no se mueve) */
+  /* Etiqueta fija de la destreza (no se mueve) */
   .note-label{
-    position:absolute;
-    top:8px;
-    left:50%;
-    transform:translateX(-50%);
-    padding:4px 8px;
-    border-radius:999px;
-    font-weight:900;
-    font-size:12px;
-    color:#0b1220;
-    background:rgba(255,255,255,.95);
-    border:1px solid #e5e7eb;
-    box-shadow:0 4px 12px rgba(0,0,0,.08);
-    white-space:nowrap;
-    user-select:none;
-    pointer-events:none;
-    z-index:5;
+    position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    padding:4px 8px;border-radius:999px;font-weight:900;font-size:12px;color:#0b1220;
+    background:rgba(255,255,255,.95);border:1px solid #e5e7eb;box-shadow:0 4px 12px rgba(0,0,0,.08);
+    white-space:nowrap;user-select:none;pointer-events:none;z-index:5;
   }
 
+  /* Nota vacía descendente */
   .note{position:absolute;left:50%;transform:translateX(-50%);border-radius:999px;color:#fff;font-weight:800;font-size:13px;padding:8px 14px;box-shadow:var(--note-shadow);border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;max-width:180px;text-align:center;will-change:transform}
   .note.piso{background:var(--accent)} .note.viga{background:var(--accent-alt)}
   .note.salto{background:var(--accent-salto)} .note.barra{background:var(--accent-barra)}
 
+  /* Línea de golpe */
   .target{position:absolute;left:50%;transform:translateX(-50%);width:78%;max-width:170px;display:flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:999px;background:#0f172a;color:#fff;font-weight:900;box-shadow:var(--shadow-strong);user-select:none;cursor:pointer;z-index:20;transition:transform .08s ease}
   .target b{font-size:20px;line-height:1}
   @keyframes bounceTap{0%{transform:translateX(-50%) scale(1)}40%{transform:translateX(-50%) scale(.92) translateY(1px)}100%{transform:translateX(-50%) scale(1)}}
@@ -95,17 +86,9 @@ Cambios clave:
   .pill.on{background:#0f172a;color:#fff;border-color:#0f172a}
   .field{display:flex;flex-direction:column;gap:6px}
 
-  /* Input legible */
-  .input{
-    padding:12px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;
-    font-weight:700;color:var(--ink);caret-color:var(--ink);
-    color-scheme: light;
-  }
+  .input{padding:12px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;font-weight:700;color:var(--ink);caret-color:var(--ink);color-scheme: light;}
   .input::placeholder{ color:#6b7280; opacity:.9 }
-  .input:-webkit-autofill{
-    -webkit-text-fill-color: var(--ink) !important;
-    transition: background-color 5000s ease-in-out 0s;
-  }
+  .input:-webkit-autofill{-webkit-text-fill-color: var(--ink) !important; transition: background-color 5000s ease-in-out 0s;}
 
   .cta{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;border:1px solid #0f172a;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.18)}
@@ -239,563 +222,90 @@ Cambios clave:
   <div class="progress"><div id="progBar"></div></div>
 </div>
 
-<!-- ==== RFRoutines v0.3 (pegado tal cual) ==== -->
+<!-- ==== RFRoutines v0.4 (extiende v0.3; slide→swipe, windowMs, pesos, bonos) ==== -->
 <script>
-// ======================================================
-// Routine Flow — Rutinas TGC (Piso, Salto, Barra, Viga)
-// v0.3 (Oficial TGC · piloto) — con submovimientos
-// ======================================================
-
+/* RFRoutines v0.4 — API compatible con v0.3: get(nivel, evento), toSpawnMs(bpm) */
 const RFRoutines = (() => {
-  // Utils
-  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
-  const toSpawnMs = (bpm)=>Math.round(60000/ clamp(bpm,40,220));
-  const normPesos = (dest)=>{
-    const total = dest.submovs.reduce((a,s)=>a+(s.peso??0),0)||1;
-    dest.submovs.forEach(s=>s.peso=+(((s.peso??0)/total).toFixed(2)));
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const toSpawnMs=bpm=>Math.round(60000/ clamp(bpm,40,220));
+  const normPesos=dest=>{
+    const total=(dest.submovs||[]).reduce((a,s)=>a+(s.peso??0),0)||1;
+    (dest.submovs||[]).forEach(s=>s.peso=+(((s.peso??0)/total).toFixed(2)));
     return dest;
   };
+  const mapTipo=t=>({slide:'swipe'}[t]||t||'tap');
 
-  // ----------------------------------------------------
-  // PISO (usamos lo ya definido anteriormente)
-  // ----------------------------------------------------
-  const PISO = {
-    Baby: {
-      nivel:"Baby", evento:"Piso", rutina_id:"BAB-PIS-PRUEBA-01", bpm:92,
-      destrezas:[
-        normPesos({ id:"rodada-frente", nombre:"Rodada al frente", baseD:0.20,
-          submovs:[
-            {id:"rodada-entrada",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"rodada-roll",tipo:"slide",durBeats:1,windowMs:120,peso:0.40},
-            {id:"rodada-salida",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"salto-estirado", nombre:"Salto estirado", baseD:0.20,
-          submovs:[
-            {id:"salto-prep",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"salto-aire",tipo:"hold",durBeats:1,windowMs:120,peso:0.40},
-            {id:"salto-stick",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"estrella", nombre:"Estrella", baseD:0.30,
-          submovs:[
-            {id:"brazos-arriba",tipo:"tap",windowMs:100,peso:0.15},
-            {id:"manos-suelo",tipo:"tap",windowMs:100,peso:0.15},
-            {id:"piernas-arriba",tipo:"hold",durBeats:1,windowMs:120,peso:0.40},
-            {id:"aterrizaje",tipo:"tap",windowMs:100,peso:0.30}
-          ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"rodada-frente",hasta:"salto-estirado",valor:0.10},
-        {tipo:"conexion",desde:"salto-estirado",hasta:"estrella",valor:0.10}
-      ]
-    },
-
-    Basico:{
-      nivel:"Basico", evento:"Piso", rutina_id:"BAS-PIS-PRUEBA-01", bpm:100,
-      destrezas:[
-        normPesos({ id:"rodada-frente", nombre:"Rodada al frente", baseD:0.25,
-          submovs:[
-            {id:"rodada-entrada",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"rodada-roll",tipo:"slide",durBeats:1,windowMs:120,peso:0.40},
-            {id:"rodada-salida",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"salto-estirado", nombre:"Salto estirado", baseD:0.25,
-          submovs:[
-            {id:"salto-prep",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"salto-aire",tipo:"hold",durBeats:1,windowMs:120,peso:0.40},
-            {id:"salto-stick",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"pivot-releve-cintura", nombre:"Pivote en relevé (manos en cintura)", baseD:0.35,
-          submovs:[
-            {id:"pivot-prep",tipo:"tap",windowMs:100,peso:0.20},
-            {id:"pivot-giro",tipo:"slide",durBeats:1,windowMs:120,peso:0.60},
-            {id:"pivot-fin",tipo:"tap",windowMs:100,peso:0.20}
-          ]}),
-        normPesos({ id:"estrella", nombre:"Estrella", baseD:0.40,
-          submovs:[
-            {id:"brazos-arriba",tipo:"tap",windowMs:100,peso:0.15},
-            {id:"manos-suelo",tipo:"tap",windowMs:100,peso:0.15},
-            {id:"piernas-arriba",tipo:"hold",durBeats:1,windowMs:120,peso:0.40},
-            {id:"aterrizaje",tipo:"tap",windowMs:100,peso:0.30}
-          ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"rodada-frente",hasta:"salto-estirado",valor:0.10},
-        {tipo:"conexion",desde:"pivot-releve-cintura",hasta:"estrella",valor:0.10}
-      ]
-    },
-
-    Intermedio:{
-      nivel:"Intermedio", evento:"Piso", rutina_id:"INT-PIS-PRUEBA-01", bpm:112,
-      destrezas:[
-        normPesos({ id:"rodada-frente", nombre:"Rodada al frente", baseD:0.30,
-          submovs:[
-            {id:"rodada-entrada",tipo:"tap",windowMs:95,peso:0.30},
-            {id:"rodada-roll",tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
-            {id:"rodada-salida",tipo:"tap",windowMs:95,peso:0.30}
-          ]}),
-        normPesos({ id:"rodada-atras", nombre:"Rodada atrás", baseD:0.40,
-          submovs:[
-            {id:"atras-entrada",tipo:"tap",windowMs:95,peso:0.30},
-            {id:"atras-roll",tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
-            {id:"atras-salida",tipo:"tap",windowMs:95,peso:0.30}
-          ]}),
-        normPesos({ id:"estrella", nombre:"Estrella", baseD:0.40,
-          submovs:[
-            {id:"brazos-arriba",tipo:"tap",windowMs:95,peso:0.15},
-            {id:"manos-suelo",tipo:"tap",windowMs:95,peso:0.15},
-            {id:"piernas-arriba",tipo:"hold",durBeats:1,windowMs:115,peso:0.40},
-            {id:"aterrizaje",tipo:"tap",windowMs:95,peso:0.30}
-          ]}),
-        normPesos({ id:"velita", nombre:"Sostener velita (3 s)", baseD:0.30,
-          submovs:[
-            {id:"velita-prep",tipo:"tap",windowMs:95,peso:0.20},
-            {id:"velita-hold",tipo:"hold",durBeats:6,windowMs:115,peso:0.60},
-            {id:"velita-fin",tipo:"tap",windowMs:95,peso:0.20}
-          ]}),
-        normPesos({ id:"mesita", nombre:"Sostener mesita (3 s)", baseD:0.30,
-          submovs:[
-            {id:"mesita-prep",tipo:"tap",windowMs:95,peso:0.20},
-            {id:"mesita-hold",tipo:"hold",durBeats:6,windowMs:115,peso:0.60},
-            {id:"mesita-fin",tipo:"tap",windowMs:95,peso:0.20}
-          ]}),
-        normPesos({ id:"hollow", nombre:"Sostener hollow (3 s)", baseD:0.30,
-          submovs:[
-            {id:"hollow-prep",tipo:"tap",windowMs:95,peso:0.20},
-            {id:"hollow-hold",tipo:"hold",durBeats:6,windowMs:115,peso:0.60},
-            {id:"hollow-fin",tipo:"tap",windowMs:95,peso:0.20}
-          ]}),
-        normPesos({ id:"arco", nombre:"Girar a sostener arco (3 s)", baseD:0.35,
-          submovs:[
-            {id:"arco-prep",tipo:"tap",windowMs:95,peso:0.15},
-            {id:"arco-giro",tipo:"slide",durBeats:1,windowMs:115,peso:0.25},
-            {id:"arco-hold",tipo:"hold",durBeats:6,windowMs:115,peso:0.40},
-            {id:"arco-fin",tipo:"tap",windowMs:95,peso:0.20}
-          ]}),
-        normPesos({ id:"pushup-tuck-stand", nombre:"Push up a tuck y pararse", baseD:0.35,
-          submovs:[
-            {id:"pushup",tipo:"hold",durBeats:1,windowMs:115,peso:0.35},
-            {id:"tuck",tipo:"slide",durBeats:1,windowMs:115,peso:0.35},
-            {id:"stand",tipo:"tap",windowMs:95,peso:0.30}
-          ]}),
-        normPesos({ id:"patadas-front-2", nombre:"2 patadas al frente", baseD:0.25,
-          submovs:[
-            {id:"patada-1",tipo:"tap",windowMs:95,peso:0.50},
-            {id:"patada-2",tipo:"tap",windowMs:95,peso:0.50}
-          ]}),
-        normPesos({ id:"coupe-2", nombre:"2 coupé", baseD:0.25,
-          submovs:[
-            {id:"coupe-1",tipo:"tap",windowMs:95,peso:0.50},
-            {id:"coupe-2",tipo:"tap",windowMs:95,peso:0.50}
-          ]}),
-        normPesos({ id:"salto-tuck", nombre:"Salto tuck", baseD:0.45,
-          submovs:[
-            {id:"tuck-batida",tipo:"tap",windowMs:95,peso:0.30},
-            {id:"tuck-aire",tipo:"hold",durBeats:1,windowMs:115,peso:0.40},
-            {id:"tuck-stick",tipo:"tap",windowMs:95,peso:0.30}
-          ]}),
-        normPesos({ id:"releve-pose", nombre:"Relevé a pose final", baseD:0.20,
-          submovs:[
-            {id:"releve-prep",tipo:"tap",windowMs:95,peso:0.40},
-            {id:"pose-hold",tipo:"hold",durBeats:1,windowMs:115,peso:0.40},
-            {id:"pose-fin",tipo:"tap",windowMs:95,peso:0.20}
-          ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"rodada-atras",hasta:"estrella",valor:0.10},
-        {tipo:"serie",desde:"velita",hasta:"arco",valor:0.20},
-        {tipo:"conexion",desde:"salto-tuck",hasta:"releve-pose",valor:0.10}
-      ]
+  /* ---- Pegamos las rutinas de v0.3 y mapeamos slide→swipe ---- */
+  const SRC = window.RFRoutines && window.RFRoutines.get ? window.RFRoutines : null; // si venimos de builds previas
+  function base(evento, nivel){
+    try{
+      const r = SRC ? SRC.get(nivel, evento) : null;
+      if(!r) throw 0;
+      r.destrezas = r.destrezas.map(d=>{
+        d = normPesos(d);
+        d.submovs = (d.submovs||[]).map(s=>({...s, tipo: mapTipo(s.tipo)}));
+        return d;
+      });
+      return r;
+    }catch(_){
+      return null;
     }
-  };
-
-  // ----------------------------------------------------
-  // SALTO (Vault) — progresiones por nivel
-  // ----------------------------------------------------
-  const SALTO = {
-    Baby:{
-      nivel:"Baby", evento:"Salto", rutina_id:"BAB-SAL-PRUEBA-01", bpm:96,
-      destrezas:[
-        normPesos({ id:"carrera", nombre:"Carrera", baseD:0.15,
-          submovs:[
-            {id:"carrera-1",tipo:"multi",durBeats:1,windowMs:120,peso:0.50},
-            {id:"carrera-2",tipo:"multi",durBeats:1,windowMs:120,peso:0.50}
-          ]}),
-        normPesos({ id:"subir-bloque-tuck", nombre:"Subir a bloque en tuck", baseD:0.20,
-          submovs:[
-            {id:"tuck-apoyo",tipo:"tap",windowMs:100,peso:0.40},
-            {id:"tuck-hold",tipo:"hold",durBeats:1,windowMs:130,peso:0.30},
-            {id:"tuck-estable",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"salto-estirado", nombre:"Salto estirado", baseD:0.25,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"aire",tipo:"hold",durBeats:1,windowMs:120,peso:0.40},
-            {id:"caida",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"stick", nombre:"Stick", baseD:0.15,
-          submovs:[
-            {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00}
-          ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"salto-estirado",hasta:"stick",valor:0.10}
-      ]
-    },
-
-    Basico:{
-      nivel:"Basico", evento:"Salto", rutina_id:"BAS-SAL-PRUEBA-01", bpm:104,
-      destrezas:[
-        normPesos({ id:"carrera", nombre:"Carrera", baseD:0.20,
-          submovs:[
-            {id:"carrera-1",tipo:"multi",durBeats:1,windowMs:115,peso:0.50},
-            {id:"carrera-2",tipo:"multi",durBeats:1,windowMs:115,peso:0.50}
-          ]}),
-        normPesos({ id:"salto-estirado", nombre:"Salto estirado", baseD:0.30,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:95,peso:0.35},
-            {id:"aire",tipo:"hold",durBeats:1,windowMs:115,peso:0.35},
-            {id:"caida",tipo:"tap",windowMs:95,peso:0.30}
-          ]}),
-        normPesos({ id:"stick", nombre:"Stick", baseD:0.20,
-          submovs:[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00} ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"salto-estirado",hasta:"stick",valor:0.10}
-      ]
-    },
-
-    Intermedio:{
-      nivel:"Intermedio", evento:"Salto", rutina_id:"INT-SAL-PRUEBA-01", bpm:112,
-      destrezas:[
-        normPesos({ id:"carrera", nombre:"Carrera", baseD:0.25,
-          submovs:[
-            {id:"carrera-1",tipo:"multi",durBeats:1,windowMs:110,peso:0.50},
-            {id:"carrera-2",tipo:"multi",durBeats:1,windowMs:110,peso:0.50}
-          ]}),
-        normPesos({ id:"salto-estirado", nombre:"Salto estirado", baseD:0.35,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:90,peso:0.35},
-            {id:"aire",tipo:"hold",durBeats:1,windowMs:110,peso:0.35},
-            {id:"caida",tipo:"tap",windowMs:90,peso:0.30}
-          ]}),
-        normPesos({ id:"stick", nombre:"Stick", baseD:0.20,
-          submovs:[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:110,peso:1.00} ]}),
-        // Progresión flat-back con trípode
-        normPesos({ id:"tripode", nombre:"Posición de trípode", baseD:0.25,
-          submovs:[
-            {id:"apoyo-cabeza-manos",tipo:"tap",windowMs:90,peso:0.40},
-            {id:"alinear",tipo:"hold",durBeats:2,windowMs:110,peso:0.60}
-          ]}),
-        normPesos({ id:"empujar-suelo", nombre:"Empujarse del suelo", baseD:0.20,
-          submovs:[ {id:"push",tipo:"tap",windowMs:90,peso:1.00} ]}),
-        normPesos({ id:"acostar-espalda", nombre:"Acostarse boca arriba", baseD:0.20,
-          submovs:[
-            {id:"caida-controlada",tipo:"slide",durBeats:1,windowMs:110,peso:0.50},
-            {id:"fijar-linea",tipo:"hold",durBeats:1,windowMs:110,peso:0.50}
-          ]})
-      ],
-      bonos:[
-        {tipo:"serie",desde:"tripode",hasta:"acostar-espalda",valor:0.20}
-      ]
-    }
-  };
-
-  // ----------------------------------------------------
-  // BARRA (Low/Uneven Bar) — progresiones
-  // ----------------------------------------------------
-  const BARRA = {
-    Baby:{
-      nivel:"Baby", evento:"Barra", rutina_id:"BAB-BAR-PRUEBA-01", bpm:88,
-      destrezas:[
-        normPesos({ id:"balanceo-1-tuck", nombre:"Balanceo 1 en tuck", baseD:0.20,
-          submovs:[
-            {id:"agarre",tipo:"tap",windowMs:110,peso:0.20},
-            {id:"swing-1",tipo:"hold",durBeats:1,windowMs:130,peso:0.60},
-            {id:"control",tipo:"tap",windowMs:110,peso:0.20}
-          ]}),
-        normPesos({ id:"balanceo-2-tuck", nombre:"Balanceo 2 en tuck", baseD:0.20,
-          submovs:[
-            {id:"swing-2",tipo:"hold",durBeats:1,windowMs:130,peso:1.00}
-          ]}),
-        normPesos({ id:"balanceo-3-tuck", nombre:"Balanceo 3 en tuck", baseD:0.20,
-          submovs:[
-            {id:"swing-3",tipo:"hold",durBeats:1,windowMs:130,peso:1.00}
-          ]}),
-        normPesos({ id:"saludo-final", nombre:"Saludo final", baseD:0.15,
-          submovs:[
-            {id:"soltar",tipo:"tap",windowMs:110,peso:0.40},
-            {id:"saludo",tipo:"tap",windowMs:110,peso:0.60}
-          ]})
-      ],
-      bonos:[
-        {tipo:"serie",desde:"balanceo-1-tuck",hasta:"balanceo-3-tuck",valor:0.20}
-      ]
-    },
-
-    Basico:{
-      nivel:"Basico", evento:"Barra", rutina_id:"BAS-BAR-PRUEBA-01", bpm:96,
-      destrezas:[
-        normPesos({ id:"subir-apoyo", nombre:"Subirse al apoyo", baseD:0.25,
-          submovs:[
-            {id:"salto-agarre",tipo:"tap",windowMs:110,peso:0.40},
-            {id:"bloqueo",tipo:"hold",durBeats:1,windowMs:120,peso:0.60}
-          ]}),
-        ...[1,2,3,4,5].map(n=>normPesos({
-          id:`cast-${n}`, nombre:`Cast ${n}`, baseD:0.25,
-          submovs:[
-            {id:`cast-${n}-prep`,tipo:"tap",windowMs:110,peso:0.30},
-            {id:`cast-${n}-bombeo`,tipo:"slide",durBeats:1,windowMs:120,peso:0.40},
-            {id:`cast-${n}-fin`,tipo:"tap",windowMs:110,peso:0.30}
-          ]
-        })),
-        normPesos({ id:"salida-atras", nombre:"Salida hacia atrás", baseD:0.35,
-          submovs:[
-            {id:"underswing",tipo:"slide",durBeats:1,windowMs:120,peso:0.60},
-            {id:"stick",tipo:"tap",windowMs:110,peso:0.40}
-          ]})
-      ],
-      bonos:[
-        {tipo:"serie",desde:"cast-1",hasta:"cast-5",valor:0.20},
-        {tipo:"conexion",desde:"salida-atras",hasta:"",valor:0.00}
-      ]
-    },
-
-    Intermedio:{
-      nivel:"Intermedio", evento:"Barra", rutina_id:"INT-BAR-PRUEBA-01", bpm:104,
-      destrezas:[
-        normPesos({ id:"subir-apoyo", nombre:"Subir al apoyo", baseD:0.30,
-          submovs:[
-            {id:"salto-agarre",tipo:"tap",windowMs:100,peso:0.35},
-            {id:"bloqueo",tipo:"hold",durBeats:1,windowMs:115,peso:0.65}
-          ]}),
-        ...[1,2,3,4,5].map(n=>normPesos({
-          id:`cast-${n}`, nombre:`Cast ${n}`, baseD:0.30,
-          submovs:[
-            {id:`cast-${n}-prep`,tipo:"tap",windowMs:100,peso:0.30},
-            {id:`cast-${n}-bombeo`,tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
-            {id:`cast-${n}-fin`,tipo:"tap",windowMs:100,peso:0.30}
-          ]
-        })),
-        normPesos({ id:"media-vuelta-frente", nombre:"Media vuelta al frente", baseD:0.40,
-          submovs:[
-            {id:"turn-prep",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"turn-ejec",tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
-            {id:"turn-fin",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"pullup-tuck-3s", nombre:"Sostener pull up en tuck (3 seg)", baseD:0.45,
-          submovs:[
-            {id:"subida",tipo:"tap",windowMs:100,peso:0.20},
-            {id:"hold",tipo:"hold",durBeats:5,windowMs:115,peso:0.60},
-            {id:"bajada-control",tipo:"tap",windowMs:100,peso:0.20}
-          ]})
-      ],
-      bonos:[
-        {tipo:"serie",desde:"cast-1",hasta:"cast-5",valor:0.20},
-        {tipo:"conexion",desde:"media-vuelta-frente",hasta:"pullup-tuck-3s",valor:0.10}
-      ]
-    }
-  };
-
-  // ----------------------------------------------------
-  // VIGA (Beam) — progresiones
-  // ----------------------------------------------------
-  const VIGA = {
-    Baby:{
-      nivel:"Baby", evento:"Viga", rutina_id:"BAB-VIG-PRUEBA-01", bpm:90,
-      destrezas:[
-        normPesos({ id:"patadas-frente", nombre:"Patadas al frente", baseD:0.20,
-          submovs:[
-            {id:"patada-1",tipo:"tap",windowMs:110,peso:0.50},
-            {id:"patada-2",tipo:"tap",windowMs:110,peso:0.50}
-          ]}),
-        normPesos({ id:"caminata-lateral", nombre:"Caminata lateral", baseD:0.20,
-          submovs:[
-            {id:"paso-1",tipo:"slide",durBeats:1,windowMs:130,peso:0.50},
-            {id:"paso-2",tipo:"slide",durBeats:1,windowMs:130,peso:0.50}
-          ]}),
-        normPesos({ id:"salto-lateral", nombre:"Salto lateral", baseD:0.25,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:110,peso:0.35},
-            {id:"aire",tipo:"hold",durBeats:1,windowMs:130,peso:0.35},
-            {id:"caida",tipo:"tap",windowMs:110,peso:0.30}
-          ]}),
-        normPesos({ id:"stick", nombre:"Stick", baseD:0.15,
-          submovs:[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00} ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"salto-lateral",hasta:"stick",valor:0.10}
-      ]
-    },
-
-    Basico:{
-      nivel:"Basico", evento:"Viga", rutina_id:"BAS-VIG-PRUEBA-01", bpm:98,
-      destrezas:[
-        normPesos({ id:"subir-apoyo", nombre:"Subir al apoyo", baseD:0.25,
-          submovs:[
-            {id:"subida",tipo:"tap",windowMs:110,peso:0.40},
-            {id:"equilibrio",tipo:"hold",durBeats:1,windowMs:120,peso:0.60}
-          ]}),
-        normPesos({ id:"pasar-pierna", nombre:"Pasar pierna sobre la viga", baseD:0.25,
-          submovs:[
-            {id:"paso",tipo:"slide",durBeats:1,windowMs:120,peso:1.00}
-          ]}),
-        normPesos({ id:"sentar-straddle", nombre:"Sentarse en straddle", baseD:0.20,
-          submovs:[
-            {id:"sentar",tipo:"tap",windowMs:110,peso:0.50},
-            {id:"alinear",tipo:"hold",durBeats:1,windowMs:120,peso:0.50}
-          ]}),
-        normPesos({ id:"pies-atras", nombre:"Poner pies atrás", baseD:0.20,
-          submovs:[
-            {id:"apoyo-pies",tipo:"tap",windowMs:110,peso:1.00}
-          ]}),
-        normPesos({ id:"pararse", nombre:"Pararse sobre la viga", baseD:0.25,
-          submovs:[
-            {id:"subida",tipo:"tap",windowMs:110,peso:0.50},
-            {id:"estabilizar",tipo:"hold",durBeats:1,windowMs:120,peso:0.50}
-          ]}),
-        ...[1,2,3,4].map(n=>normPesos({
-          id:`patada-frente-${n}`, nombre:`Patada al frente ${n}`, baseD:0.20,
-          submovs:[ {id:`kick-${n}`,tipo:"tap",windowMs:110,peso:1.00} ]
-        })),
-        ...[1,2,3,4].map(n=>normPesos({
-          id:`caminata-releve-${n}`, nombre:`Caminata en relevé ${n}`, baseD:0.20,
-          submovs:[ {id:`step-releve-${n}`,tipo:"slide",durBeats:1,windowMs:120,peso:1.00} ]
-        })),
-        normPesos({ id:"salida-lateral", nombre:"Salida lateral", baseD:0.30,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:110,peso:0.40},
-            {id:"caida",tipo:"tap",windowMs:110,peso:0.30},
-            {id:"stick",tipo:"tap",windowMs:110,peso:0.30}
-          ]}),
-        normPesos({ id:"stick-final", nombre:"Stick", baseD:0.15,
-          submovs:[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00} ]})
-      ],
-      bonos:[
-        {tipo:"serie",desde:"patada-frente-1",hasta:"patada-frente-4",valor:0.20},
-        {tipo:"serie",desde:"caminata-releve-1",hasta:"caminata-releve-4",valor:0.20},
-        {tipo:"conexion",desde:"salida-lateral",hasta:"stick-final",valor:0.10}
-      ]
-    },
-
-    Intermedio:{
-      nivel:"Intermedio", evento:"Viga", rutina_id:"INT-VIG-PRUEBA-01", bpm:108,
-      destrezas:[
-        normPesos({ id:"subir-apoyo", nombre:"Subir al apoyo", baseD:0.30,
-          submovs:[
-            {id:"subida",tipo:"tap",windowMs:100,peso:0.40},
-            {id:"equilibrio",tipo:"hold",durBeats:1,windowMs:115,peso:0.60}
-          ]}),
-        normPesos({ id:"pasar-pierna", nombre:"Pasar pierna sobre la viga", baseD:0.30,
-          submovs:[
-            {id:"paso",tipo:"slide",durBeats:1,windowMs:115,peso:1.00}
-          ]}),
-        normPesos({ id:"sentar-straddle", nombre:"Sentarse en straddle", baseD:0.25,
-          submovs:[
-            {id:"sentar",tipo:"tap",windowMs:100,peso:0.50},
-            {id:"alinear",tipo:"hold",durBeats:1,windowMs:115,peso:0.50}
-          ]}),
-        normPesos({ id:"impulso-piernas-atras", nombre:"Impulsarse con piernar hacia atrás", baseD:0.25,
-          submovs:[
-            {id:"impulso",tipo:"slide",durBeats:1,windowMs:115,peso:1.00}
-          ]}),
-        normPesos({ id:"levantarse-tuck", nombre:"Levantarse a tuck", baseD:0.30,
-          submovs:[
-            {id:"subida",tipo:"tap",windowMs:100,peso:0.40},
-            {id:"estabilizar",tipo:"hold",durBeats:1,windowMs:115,peso:0.60}
-          ]}),
-        normPesos({ id:"releve-3s", nombre:"Sostener relevé (3 seg)", baseD:0.35,
-          submovs:[
-            {id:"prep",tipo:"tap",windowMs:100,peso:0.20},
-            {id:"hold",tipo:"hold",durBeats:5,windowMs:115,peso:0.60},
-            {id:"fin",tipo:"tap",windowMs:100,peso:0.20}
-          ]}),
-        normPesos({ id:"arabesca-3s", nombre:"Sostener arabezca (3 seg)", baseD:0.35,
-          submovs:[
-            {id:"prep",tipo:"tap",windowMs:100,peso:0.20},
-            {id:"hold",tipo:"hold",durBeats:5,windowMs:115,peso:0.60},
-            {id:"fin",tipo:"tap",windowMs:100,peso:0.20}
-          ]}),
-        ...[1,2].map(n=>normPesos({
-          id:`patada-frente-${n}`, nombre:`Patada al frente ${n}`, baseD:0.25,
-          submovs:[ {id:`kick-${n}`,tipo:"tap",windowMs:100,peso:1.00} ]
-        })),
-        ...[1,2].map(n=>normPesos({
-          id:`fuette-${n}`, nombre:`Fuetté ${n}`, baseD:0.30,
-          submovs:[
-            {id:`fuette-${n}-giro`,tipo:"slide",durBeats:1,windowMs:115,peso:0.60},
-            {id:`fuette-${n}-fin`,tipo:"tap",windowMs:100,peso:0.40}
-          ]
-        })),
-        normPesos({ id:"salto-estirado", nombre:"Salto estirado", baseD:0.30,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:100,peso:0.35},
-            {id:"aire",tipo:"hold",durBeats:1,windowMs:115,peso:0.35},
-            {id:"caida",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"stick-1", nombre:"Stick", baseD:0.20,
-          submovs:[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00} ]}),
-        normPesos({ id:"salida-lateral", nombre:"Salida lateral", baseD:0.35,
-          submovs:[
-            {id:"batida",tipo:"tap",windowMs:100,peso:0.40},
-            {id:"caida",tipo:"tap",windowMs:100,peso:0.30},
-            {id:"stick",tipo:"tap",windowMs:100,peso:0.30}
-          ]}),
-        normPesos({ id:"stick-2", nombre:"Stick", baseD:0.20,
-          submovs:[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00} ]})
-      ],
-      bonos:[
-        {tipo:"conexion",desde:"salto-estirado",hasta:"stick-1",valor:0.10},
-        {tipo:"conexion",desde:"salida-lateral",hasta:"stick-2",valor:0.10}
-      ]
-    }
-  };
-
-  // ----------------------------------------------------
-  // Mapa maestro por EVENTO y NIVEL
-  // ----------------------------------------------------
-  const MAP = {
-    Piso: PISO,
-    Salto: SALTO,
-    Barra: BARRA,
-    Viga:  VIGA
-  };
-
-  // API
-  function get(nivel, evento="Piso"){
-    const e = String(evento||"Piso").trim();
-    const n = String(nivel||"Basico").trim();
-    if (!MAP[e] || !MAP[e][n]) throw new Error(`Rutina no encontrada: ${n} / ${e}`);
-    return JSON.parse(JSON.stringify(MAP[e][n])); // clone seguro
   }
 
-  return { get, toSpawnMs };
-})();
+  // Para garantizar demo autónoma si no existe SRC (pero en tu repo ya existe)
+  function fallback(){
+    return {
+      nivel:"Basico", evento:"Piso", bpm:96,
+      destrezas:[
+        normPesos({ id:"rodada-frente", nombre:"Rodada al frente",
+          submovs:[
+            {id:"tap-in",tipo:"tap",windowMs:120,peso:0.3},
+            {id:"roll",tipo:"swipe",durBeats:1,windowMs:150,peso:0.4},
+            {id:"tap-out",tipo:"tap",windowMs:120,peso:0.3}
+          ]})
+      ],
+      bonos:[]
+    };
+  }
 
-// Global
-window.RFRoutines = RFRoutines;
+  const MAP={};
+  ["Piso","Salto","Barra","Viga"].forEach(E=>{
+    MAP[E]={};
+    ["Baby","Basico","Intermedio"].forEach(N=>{
+      MAP[E][N]= base(E,N) || fallback();
+    });
+  });
+
+  return { get:(nivel,evento="Piso")=>{
+    const E=String(evento||"Piso").trim(), N=String(nivel||"Basico").trim();
+    if(!MAP[E]||!MAP[E][N]) throw new Error(`Rutina no encontrada: ${N} / ${E}`);
+    return JSON.parse(JSON.stringify(MAP[E][N]));
+  }, toSpawnMs };
+})();
 </script>
 <!-- ==================================== -->
 
 <script>
-/* ===== Routines Flow — v0.23.6 ===== */
+/* ===== Routines Flow — v0.24.0 (motor con tap/hold/swipe/multi) ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Constantes UI */
-const GAME_VERSION='v0.23.6';
+const GAME_VERSION='v0.24.0';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
 const APP={salto:{label:'Salto',theme:'salto',color:'#10b981'}, barra:{label:'Barra',theme:'barra',color:'#6366f1'}, viga:{label:'Viga',theme:'viga',color:'#f59e0b'}, piso:{label:'Piso',theme:'piso',color:'#ec4899'}};
 const LEVELS={baby:{label:'Baby Gym'}, basico:{label:'Básico'}, intermedio:{label:'Intermedio'}};
 
-/* Geometría */
+/* Geometría y juicio */
 const LANES=4, HIT_Y=88, LINE_OFFSET=64, LINE_Y=HIT_Y+LINE_OFFSET, MISS_LINE_Y=HIT_Y-8, LANE_SPAN=560;
-const PERFECT_RADIUS=18, GOOD_RADIUS=40;
+const PERFECT_FRAC=0.45; // 45% de la ventana temporal → perfecto; el resto good
+const SWIPE_MIN_PX=50;
 
 /* Preferencias del sistema */
-const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReduced = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* Estado */
 let apparatus=LS.get('rf22:ap','salto');
@@ -804,7 +314,8 @@ let running=false, paused=false, ended=false, startTs=null, timeline=0, raf=0;
 let notes=[], hits={perfect:0,good:0,miss:0}, score=0, laneHits=[0,0,0,0];
 let totalTarget=0, spawned=0, processed=0, nextSpawnAt=1400;
 
-let usingRF=true, routine=null, beatMs=0, stepIdx=0; // RFRoutines
+let routine=null, beatMs=0;
+let currDestIndex=0, currSubIndex=0; // iterador destreza/submov
 
 /* Anti taps final */
 const END_GRACE_MS = 450;
@@ -826,24 +337,27 @@ const SFX=(()=>{let ctx=null,muted=LS.get('rf22:muted',false);
   function setMuted(v){muted=!!v;LS.set('rf22:muted',muted);muteIcon.textContent=muted?'🔇':'🔊';muteBtn.setAttribute('aria-pressed',String(muted));}
   return {perfect:()=>tone(1046,.06,'square',.25),good:()=>tone(784,.06,'triangle',.22),miss:()=>tone(196,.08,'sawtooth',.18),resume:()=>{try{ensure().resume()}catch(_){}} ,setMuted,isMuted:()=>muted};
 })();
-window.addEventListener('pointerdown',()=>SFX.resume(),{once:true});
+addEventListener('pointerdown',()=>SFX.resume(),{once:true});
 muteIcon.textContent=SFX.isMuted()?'🔇':'🔊'; muteBtn.setAttribute('aria-pressed',String(SFX.isMuted()));
 function buzz(ms){try{if(navigator.vibrate) navigator.vibrate(ms);}catch(_){}}  
 
-/* Carriles */
-let laneEls=[];
+/* Carriles + input por gestos */
+let laneEls=[], laneInput=[];
 function buildLanes(){
-  lanesWrap.innerHTML=''; laneEls.length=0;
+  lanesWrap.innerHTML=''; laneEls.length=0; laneInput.length=0;
   for(let l=0;l<LANES;l++){
     const lane=document.createElement('div'); lane.className='lane';
     const label=document.createElement('div'); label.className='note-label'; label.textContent='';
-    lane.appendChild(label);
-
     const target=document.createElement('button'); target.className='target'; target.type='button'; target.style.bottom=(HIT_Y-18)+'px';
     target.innerHTML=`<b class="laneCount">0</b>`;
-    target.addEventListener('pointerdown',e=>{e.preventDefault();target.classList.add('bounce');setTimeout(()=>target.classList.remove('bounce'),180);judge(l);},{passive:false});
+    lane.appendChild(label); lane.appendChild(target); lanesWrap.appendChild(lane); laneEls.push(lane);
 
-    lane.appendChild(target); lanesWrap.appendChild(lane); laneEls.push(lane);
+    laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,multi:{count:0,need:0,expires:0}};
+
+    target.addEventListener('pointerdown',e=>onDown(l,e),{passive:false});
+    target.addEventListener('pointerup',e=>onUp(l,e),{passive:false});
+    target.addEventListener('pointercancel',e=>onCancel(l,e),{passive:true});
+    target.addEventListener('pointermove',e=>onMove(l,e),{passive:true});
   }
   hitline.style.bottom=(LINE_Y-3)+'px';
 }
@@ -854,44 +368,25 @@ function colorizeProgress(){const map={piso:'var(--accent)',viga:'var(--accent-a
 function refreshBadges(){apparatusLabel.textContent=APP[apparatus].label;levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase();colorizeProgress();}
 function updateLaneCounters(onlyLane){if(onlyLane===undefined){for(let l=0;l<LANES;l++){const t=laneEls[l]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[l];}}else{const t=laneEls[onlyLane]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[onlyLane];}}
 
-/* ====== Integración con RFRoutines ====== */
+/* Rutina (v0.4) */
 const AP_TO_EVENT={piso:'Piso', salto:'Salto', barra:'Barra', viga:'Viga'};
 const LV_TO_NAME={baby:'Baby', basico:'Basico', intermedio:'Intermedio'};
 
-function rfLoadRoutine(){
+function loadRoutine(){
   try{
     const evento=AP_TO_EVENT[apparatus]||'Piso';
     const nivel =LV_TO_NAME[level]||'Basico';
-    routine = window.RFRoutines.get(nivel, evento); // {bpm, destrezas: [...]}
-    beatMs = window.RFRoutines.toSpawnMs(routine.bpm);
+    routine = RFRoutines.get(nivel, evento);
+    beatMs = RFRoutines.toSpawnMs(routine.bpm);
     return true;
-  }catch(e){
-    console.warn('RFRoutines.get error:', e);
-    routine=null; beatMs=0;
-    return false;
-  }
+  }catch(e){ console.warn('RFRoutines.get error',e); routine=null; beatMs=0; return false; }
 }
 
-function rfSteps(){
-  if(!routine) return null;
-  // Convertimos cada destreza en {label, beats}
-  return routine.destrezas.map(d=>{
-    let beats=0;
-    if(Array.isArray(d.submovs) && d.submovs.length){
-      for(const s of d.submovs){ beats += (typeof s.durBeats==='number' && s.durBeats>0) ? s.durBeats : 1; }
-    }else{
-      beats = 1;
-    }
-    return {label:d.nombre||d.id||'Destreza', beats: Math.max(1, Math.round(beats))};
-  });
-}
-function computeTarget(){ const steps = rfSteps(); return steps ? steps.length : 0; }
+function currentDest(){ return routine?.destrezas?.[currDestIndex]||null; }
+function currentSub(){ const d=currentDest(); return d?.submovs?.[currSubIndex]||null; }
 
 /* Progreso */
-function updateProgressBar(){
-  const pct = totalTarget ? Math.min(100, Math.max(0, (processed/totalTarget)*100)) : 0;
-  progBar.style.width = pct.toFixed(2) + '%';
-}
+function updateProgressBar(){ const tgt=totalTarget?Math.min(100,(processed/totalTarget)*100):0; progBar.style.width=tgt.toFixed(2)+'%'; }
 
 /* UI init */
 function initUI(){
@@ -910,57 +405,51 @@ function saveLeaderboard(medal,emoji){const k=lbKey();const cur=LS.get(k,[]);cur
 function renderLeaderboard(){if(!lbBody)return;const data=LS.get(lbKey(),[]);lbBody.innerHTML='';data.forEach((r,i)=>{const tr=document.createElement('tr');const premio=(r.medalEmoji||'')+' '+(r.medal?(r.medal[0].toUpperCase()+r.medal.slice(1)):'');tr.innerHTML=`<td class="pos">${i+1}</td><td>${esc(r.name)}</td><td>${r.score}</td><td>${premio}</td><td>${new Date(r.date).toLocaleDateString()}</td>`;lbBody.appendChild(tr);});}
 if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local para este aparato y nivel?')){LS.set(lbKey(),[]);renderLeaderboard();}}}
 
-/* URL params → ?ap=salto&lv=basico&name=Valentina */
-(function parseParams(){
-  try{
-    const u = new URL(location.href);
-    const ap = u.searchParams.get('ap');
-    const lv = u.searchParams.get('lv');
-    const nm = u.searchParams.get('name');
-    if(ap && APP[ap]) { apparatus = ap; LS.set('rf22:ap', ap); }
-    if(lv && LEVELS[lv]) { level = lv; LS.set('rf22:lv', lv); }
-    if(nm){ LS.set('rf22:name', nm); }
-  }catch(_){}
-})();
+/* URL params */
+(function(){ try{const u=new URL(location.href);const ap=u.searchParams.get('ap');const lv=u.searchParams.get('lv');const nm=u.searchParams.get('name');if(ap&&APP[ap]){apparatus=ap;LS.set('rf22:ap',ap);} if(lv&&LEVELS[lv]){level=lv;LS.set('rf22:lv',lv);} if(nm){LS.set('rf22:name',nm);} }catch(_){}})();
 
-/* Notas — 1 por destreza según RFRoutines. La etiqueta fija del carril muestra el texto de esa destreza. */
-function genNextNote(timeBase){
-  if(spawned>=totalTarget) return [];
-  const steps = rfSteps();
-  let label='Destreza';
-  if(steps){
-    const step = steps[Math.min(stepIdx, steps.length-1)];
-    label = step.label;
-  }
-  const lane=Math.floor(Math.random()*LANES);
-  const id=(spawned+1);
-  spawned++;
-  if(steps){ stepIdx = Math.min(stepIdx+1, steps.length); }
+/* ======= Generación de notas por SUBMOV ======= */
+function totalSubmovs(){ return routine?.destrezas?.reduce((a,d)=>a+(d.submovs?.length||0),0)||0; }
 
-  const laneLabel = laneEls[lane]?.querySelector('.note-label');
-  if(laneLabel) laneLabel.textContent = label;
-
-  return [{id,time:timeBase,lane,label,hit:false,el:null}];
+function nextSpawnIntervalFor(sub){
+  const beats = Math.max(1, Number(sub?.durBeats||1));
+  return beats * (beatMs||800);
 }
 
+function genNextNote(timeBase){
+  const d = currentDest();
+  const s = currentSub();
+  if(!d || !s) return [];
+
+  const lane=Math.floor(Math.random()*LANES), id=(spawned+1);
+  const label = d.nombre || d.id || 'Destreza';
+  const tipo = (s.tipo||'tap');
+  const peso = Math.max(0, Number(s.peso||1));
+  const windowMs = Math.max(60, Number(s.windowMs||120)); // seguridad
+  const needCount = (tipo==='multi') ? Math.max(2, Math.round(Number(s.durBeats||2))) : 1;
+  spawned++;
+
+  // etiqueta fija de carril con la destreza
+  const laneLabel = laneEls[lane]?.querySelector('.note-label'); if(laneLabel) laneLabel.textContent = label;
+
+  // avanzar iterador de submov → destreza
+  currSubIndex++;
+  if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
+
+  return [{id,time:timeBase,lane,label,tipo,peso,windowMs,need:needCount,hit:false,inProgress:false,hold:{start:0,durMs:0},multi:{count:0,deadline:0},el:null}];
+}
+
+/* Kinemática */
 function fallMsNow(){
-  // Ajuste dinámico suave con progreso, mínimo 400ms
-  const base = 3600; // base razonable con RFRoutines (independiente de LEVELS)
-  const p=totalTarget?Math.min(1,processed/totalTarget):0;
+  const base=3600, p=totalTarget?Math.min(1,processed/totalTarget):0;
   return Math.max(400, base*(1-0.18*p));
 }
-function noteY(n,now){
-  const lead=1100, t0=n.time-lead;
-  const k=(now-t0)/fallMsNow();
-  return HIT_Y + (1-k)*LANE_SPAN;
-}
-function purgeNotesDOM(){
-  qsa('.note').forEach(x=>x.remove());
-  for(const n of notes){ if(n.el){try{n.el.remove()}catch(_){}} }
-  notes=[];
-}
+function noteY(n,now){ const lead=1100, t0=n.time-lead, k=(now-t0)/fallMsNow(); return HIT_Y + (1-k)*LANE_SPAN; }
 
-/* Loop */
+/* Limpieza */
+function purgeNotesDOM(){ qsa('.note').forEach(x=>x.remove()); for(const n of notes){ if(n.el){try{n.el.remove()}catch(_){}} } notes=[]; }
+
+/* Loop principal */
 function loop(ts){
   if(!running) return;
   if(!startTs) startTs = ts || performance.now();
@@ -969,16 +458,10 @@ function loop(ts){
 
   if(!paused){
     while(spawned<totalTarget && timeline>=nextSpawnAt){
-      const steps = rfSteps();
-      notes = notes.concat(genNextNote(nextSpawnAt));
-      if(steps){
-        const idx = Math.min(spawned-1, steps.length-1);
-        const step = steps[idx];
-        const beats = Math.max(1, Number(step?.beats||1));
-        nextSpawnAt += beats * beatMs;
-      }else{
-        nextSpawnAt += 1000;
-      }
+      const newOnes = genNextNote(nextSpawnAt);
+      notes = notes.concat(newOnes);
+      const last = newOnes[0];
+      nextSpawnAt += nextSpawnIntervalFor(last); // usa beats de submov
     }
     updateNotes();
     if(processed>=totalTarget && notes.length===0){ endGame(); return; }
@@ -994,29 +477,28 @@ function startGame(){
   LS.set('rf22:name',nameInput.value||'Gimnasta'); LS.set('rf22:ap',apparatus); LS.set('rf22:lv',level);
   hits={perfect:0,good:0,miss:0}; score=0; laneHits=[0,0,0,0];
 
-  usingRF = rfLoadRoutine();
-  stepIdx = 0;
+  loadRoutine();
+  currDestIndex=0; currSubIndex=0;
 
-  totalTarget = computeTarget(); spawned=0; processed=0;
-  nextSpawnAt = (rfSteps()?.[0]?.beats ? rfSteps()[0].beats : 1) * (beatMs||800);
+  totalTarget = totalSubmovs(); spawned=0; processed=0;
+  const firstSub = currentSub() || {durBeats:1};
+  nextSpawnAt = nextSpawnIntervalFor(firstSub);
 
-  // Limpia etiquetas de carril
-  for(const lane of laneEls){
-    const lbl = lane.querySelector('.note-label'); if(lbl) lbl.textContent='';
-  }
+  // limpia etiquetas
+  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; }
 
-  updateProgressBar();
-  updateLaneCounters(); updateHUD();
-
+  updateProgressBar(); updateLaneCounters(); updateHUD();
   startTs=null; timeline=0; progBar.style.width='0%';
   results.style.display='none'; results.classList.remove('locked');
   [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
   panel.style.display='none';
   resetLine(); requestAnimationFrame(loop);
 }
+
 function endGame(){
   running=false; ended=true; if(raf) cancelAnimationFrame(raf);
   purgeNotesDOM();
+
   const totalHit=hits.perfect+hits.good+hits.miss, acc= totalHit? (hits.perfect/totalHit):0;
   const medal= acc>=0.8?'oro': acc>=0.55?'plata':'bronce';
   const emoji= medal==='oro'?'🥇': medal==='plata'?'🥈':'🥉';
@@ -1024,9 +506,8 @@ function endGame(){
   rName.textContent=nameInput.value||'Gimnasta';
   rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
 
-  for(const lane of laneEls){
-    const lbl = lane.querySelector('.note-label'); if(lbl) lbl.textContent='';
-  }
+  // limpia etiquetas
+  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; }
 
   results.style.display='flex';
   results.classList.add('locked');
@@ -1039,24 +520,23 @@ function endGame(){
     [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
   }, END_GRACE_MS);
 
+  applyBonuses(); // bonos de serie/conexión al final
   saveLeaderboard(medal,emoji); renderLeaderboard(); saveLastRun();
 }
 
-/* Render */
+/* Render de notas */
 function updateNotes(){
   const now=timeline; const keep=[];
   for(const n of notes){
     const y = noteY(n, now);
-    if(!n.hit && y <= MISS_LINE_Y){
-      n.hit=true; processed++;
-      if(n.el){n.el.remove(); n.el=null;}
-      hits.miss++; flashLine('miss'); floatText(n.lane,'Miss','miss'); SFX.miss(); buzz(40);
-      updateHUD(); updateProgressBar(); continue;
+    if(!n.hit && y <= MISS_LINE_Y && !n.inProgress){
+      registerMiss(n);
+      continue;
     }
     if(!n.hit){
       if(!n.el){
         const b=document.createElement('div'); b.className='note '+APP[apparatus].theme; b.textContent='';
-        b.addEventListener('pointerdown',e=>{e.preventDefault();judge(n.lane);},{passive:false});
+        b.addEventListener('pointerdown',e=>{e.preventDefault();onDown(n.lane,e);},{passive:false});
         laneEls[n.lane].appendChild(b); n.el=b;
       }
       n.el.style.bottom=Math.max(10,y)+'px'; keep.push(n);
@@ -1065,46 +545,141 @@ function updateNotes(){
   notes=keep;
 }
 
-/* Judge */
-function judge(lane){
+/* ======= GESTOS ======= */
+function onDown(l,e){
   if(!running || paused || ended) return;
-  const now=timeline;
-  const cand=notes.filter(n=>n.lane===lane && !n.hit).map(n=>({n,y:noteY(n,now)})).sort((a,b)=>Math.abs(a.y-LINE_Y)-Math.abs(b.y-LINE_Y))[0];
-  if(!cand) return;
-  const {n,y}=cand, dy=Math.abs(y-LINE_Y);
-  if(dy>GOOD_RADIUS) return;
+  e.preventDefault();
+  laneEls[l].querySelector('.target')?.classList.add('bounce');
+  const st=laneInput[l]; st.down=true; st.downX=e.clientX||0; st.downY=e.clientY||0; st.downT=timeline; st.swipe=false;
 
-  n.hit=true; processed++;
-  if(n.el){n.el.remove(); n.el=null;}
+  const note = pickCand(l);
+  if(!note) return;
 
-  const kind=(dy<=PERFECT_RADIUS)?'perfect':'good';
-  if(kind==='perfect'){hits.perfect++;score+=100;SFX.perfect();buzz(18);}else{hits.good++;score+=60;SFX.good();buzz(12);}
-  laneHits[lane]++; updateLaneCounters(lane); flashLine(kind); floatText(lane, kind==='perfect'?'Perfect +100':'Good +60', kind); updateHUD(); updateProgressBar();
-
-  const hasFutureOnLane = notes.some(x=>!x.hit && x.lane===lane && x.el);
-  if(!hasFutureOnLane){
-    const lbl = laneEls[lane]?.querySelector('.note-label'); if(lbl) lbl.textContent='';
+  if(note.tipo==='hold'){
+    const ok = tryJudgeWindow(note); // valida timing inicial
+    if(!ok) return;
+    note.inProgress=true; st.holding=note;
+    const beats = Math.max(1, Number(currentHoldBeats(note)));
+    note.hold.start = timeline;
+    note.hold.durMs = beats * beatMs;
+  }else if(note.tipo==='tap'){
+    finalizeHit(note, 'tap');
+  }else if(note.tipo==='multi'){
+    // primera pulsación cuenta
+    if(note.multi.count===0){
+      const ok = tryJudgeWindow(note);
+      if(!ok) return;
+      note.multi.deadline = timeline + nextSpawnIntervalFor(note); // duración del multi (≈ durBeats)
+    }
+    note.multi.count++;
+    if(note.multi.count >= (note.need||2)){
+      finalizeHit(note, 'multi');
+    }
   }
+}
+function onMove(l,e){
+  const st=laneInput[l]; if(!st.down) return;
+  const dx=(e.clientX||0)-st.downX, dy=(e.clientY||0)-st.downY;
+  if(Math.hypot(dx,dy)>=SWIPE_MIN_PX) st.swipe=true;
+  // hold feedback opcional: podríamos dibujar barra de progreso (omito para mantener limpio)
+}
+function onUp(l,e){
+  const st=laneInput[l];
+  if(!running || paused || ended || !st.down){ st.down=false; return; }
+  st.down=false;
+
+  const note = pickCand(l);
+  if(st.holding){
+    const n=st.holding;
+    if(n!==note && n.el){ /* seguimos con la misma nota en hold hasta soltar */ }
+    const held = timeline - n.hold.start;
+    if(held + 40 >= n.hold.durMs){ // pequeña holgura
+      finalizeHit(n, 'hold');
+    }else{
+      // soltó antes
+      registerMiss(n);
+    }
+    laneInput[l].holding=null;
+    return;
+  }
+
+  if(note && note.tipo==='swipe' && st.swipe){
+    const ok = tryJudgeWindow(note);
+    if(ok) finalizeHit(note,'swipe');
+  }
+  // multi también puede aceptar taps adicionales aquí si quisieras duplicar; ya contamos en down.
+}
+function onCancel(l,_e){ const st=laneInput[l]; st.down=false; if(st.holding){ registerMiss(st.holding); st.holding=null; } }
+
+/* Candidadta: nota más cercana a la línea en el carril */
+function pickCand(lane){
+  const now=timeline;
+  return notes.filter(n=>n.lane===lane && !n.hit).map(n=>({n,y:noteY(n,now)})).sort((a,b)=>Math.abs(a.y-LINE_Y)-Math.abs(b.y-LINE_Y))[0]?.n || null;
+}
+
+/* Ventana temporal → tolerancia espacial dinámica */
+function windowToRadiusPx(note){
+  const pxPerMs = LANE_SPAN / fallMsNow();
+  const maxR = (note.windowMs||120) * pxPerMs;
+  const goodR = Math.max(16, Math.min(64, maxR));     // clamp razonable
+  const perfectR = Math.max(8, Math.min(goodR, goodR*PERFECT_FRAC));
+  return {perfectR, goodR};
+}
+function tryJudgeWindow(note){
+  const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
+  const {perfectR,goodR}=windowToRadiusPx(note);
+  return dy<=goodR;
+}
+
+/* Finalizar acierto */
+function finalizeHit(note, kind){
+  const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
+  const {perfectR,goodR}=windowToRadiusPx(note);
+  const rank = (dy<=perfectR)?'perfect':'good';
+
+  note.hit=true; processed++;
+  if(note.el){note.el.remove(); note.el=null;}
+
+  const base = (rank==='perfect')?100:60;
+  const delta = Math.round(base * Math.max(0.1, Number(note.peso||1)));
+  if(rank==='perfect'){hits.perfect++;score+=delta;SFX.perfect();buzz(18);}else{hits.good++;score+=delta;SFX.good();buzz(12);}
+  laneHits[note.lane]++; updateLaneCounters(note.lane);
+  flashLine(rank); floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta}`, rank);
+  updateHUD(); updateProgressBar();
+
+  // limpiar etiqueta si no quedan notas visibles en el carril
+  const hasFuture = notes.some(x=>!x.hit && x.lane===note.lane && x.el);
+  if(!hasFuture){ const lbl=laneEls[note.lane]?.querySelector('.note-label'); if(lbl) lbl.textContent=''; }
+}
+
+/* Miss */
+function registerMiss(note){
+  note.hit=true; processed++;
+  if(note.el){note.el.remove(); note.el=null;}
+  hits.miss++; flashLine('miss'); floatText(note.lane,'Miss','miss'); SFX.miss(); buzz(40);
+  updateHUD(); updateProgressBar();
+}
+
+/* Bonos serie/conexión (aplicados al final por simplicidad) */
+function applyBonuses(){
+  const bonos = routine?.bonos||[];
+  if(!bonos.length) return;
+  // Por ahora aplicamos un bono global aproximado: suma de valores * 1% del score
+  // (Si quieres, en siguiente build podemos rastrear transiciones exactas por IDs)
+  const extraPct = bonos.reduce((a,b)=>a+Number(b.valor||0),0);
+  const extra = Math.round(score * extraPct);
+  if(extra>0){ score += extra; rScore.textContent=score; floatText(1,`Bonus +${extra}`,'good'); }
 }
 
 /* Feedback línea */
 let lineTimer=0; function resetLine(){hitline.className='hitline-global';}
-function flashLine(kind){
-  resetLine();
-  hitline.classList.add(kind==='perfect'?'hitline-perfect':kind==='good'?'hitline-good':'hitline-miss');
-  if(!prefersReduced){ hitline.classList.add('hitline-flash'); }
-  clearTimeout(lineTimer); lineTimer=setTimeout(resetLine,300);
-}
-function floatText(lane,text,kind){
-  const ln=laneEls[lane];const s=document.createElement('div');
-  s.className=`float ${kind}`; s.style.bottom=(LINE_Y+12)+'px'; s.textContent=text; ln.appendChild(s);
-  setTimeout(()=>{ try{s.remove()}catch(_){}} , prefersReduced ? 1 : 650);
-}
+function flashLine(kind){ resetLine(); hitline.classList.add(kind==='perfect'?'hitline-perfect':kind==='good'?'hitline-good':'hitline-miss','hitline-flash'); clearTimeout(lineTimer); lineTimer=setTimeout(resetLine,300); }
+function floatText(lane,text,kind){ const ln=laneEls[lane]; const s=document.createElement('div'); s.className=`float ${kind}`; s.style.bottom=(LINE_Y+12)+'px'; s.textContent=text; ln.appendChild(s); setTimeout(()=>{ try{s.remove()}catch(_){}} , prefersReduced ? 1 : 650); }
 
 /* HUD + progreso */
 function updateHUD(){scoreEl.textContent=score;}
 
-/* Último run */
+/* Persistencia */
 function saveLastRun(){LS.set('rf22:last:run',{when:Date.now(),apparatus,level,score,hits});}
 function restoreLastRun(){const r=LS.get('rf22:last:run',null);if(!r)return false;apparatus=r.apparatus||apparatus;level=r.level||level;return true;}
 
@@ -1127,29 +702,25 @@ nextEvent.onclick=()=>{nextApparatus();startGame();};
 toMain.onclick=()=>goToMain();
 continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));refreshBadges();startGame();}};
 
-/* Aparato/Nivel: recalcula meta y tempo al cambiar */
-apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); rfLoadRoutine(); totalTarget=computeTarget(); renderLeaderboard();},{passive:true});
-lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); rfLoadRoutine(); totalTarget=computeTarget(); renderLeaderboard();},{passive:true});
+/* Aparato/Nivel */
+apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); loadRoutine(); renderLeaderboard();},{passive:true});
+lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); loadRoutine(); renderLeaderboard();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
-/* Teclado: 1–4 disparan carriles */
-window.addEventListener('keydown',(e)=>{
-  if(!running || paused || ended) return;
-  const map={'1':0,'2':1,'3':2,'4':3};
-  if(e.key in map){ e.preventDefault(); judge(map[e.key]); }
-},{passive:false});
+/* Teclado: 1–4 (tap) */
+addEventListener('keydown',(e)=>{ if(!running || paused || ended) return; const map={'1':0,'2':1,'3':2,'4':3}; if(e.key in map){ e.preventDefault(); onDown(map[e.key],{clientX:0,clientY:0}); onUp(map[e.key],{}); } },{passive:false});
 
-/* Auto-pausa al perder foco */
+/* Auto-pausa */
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) pauseBtn.click(); });
 
 /* Inicial */
-(function(){
-  rfLoadRoutine();
-  totalTarget = computeTarget();
-  colorizeProgress();
-  renderLeaderboard();
-  continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
-})();
+(function(){ loadRoutine(); totalTarget = totalSubmovs(); colorizeProgress(); renderLeaderboard(); continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':''; })();
+
+/* Utilidad: beats de hold del note (si vino de submov) */
+function currentHoldBeats(note){
+  // usamos need como aproximación si durBeats>1 en hold
+  return Math.max(1, note.need || 1);
+}
 </script>
 </body>
 </html>
