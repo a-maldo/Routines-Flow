@@ -1,22 +1,21 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.23.0
+Versión: v0.23.4
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
-Fecha: 2025-10-07
+Fecha: 2025-10-19
 
 Descripción:
 Juego educativo inspirado en las rutinas de gimnasia artística femenina del TGC.
 La jugadora debe tocar las destrezas en el ritmo correcto para sumar puntos.
 
-Notas de esta versión (v0.23.0):
-- Compatibilidad y rendimiento: soporte de prefers-reduced-motion, teclado 1–4, aria-live.
-- Modos rápidos: 🔋 Ahorro (reduce sombras y carga) y 🌓 Alto contraste.
-- URL params: ?ap=salto&lv=basico&name=Valentina para precargar opciones.
-- Progreso robusto (evita NaN%), pequeños fixes de estabilidad.
-- Mantiene: spawn separado (1 nota por intervalo), reanudar desde pausa, z-index targets, listeners unificados.
+Notas de esta versión (v0.23.4):
+- 📘 Integrado "Game Design v0.2": BPM por aparato/nivel y rutinas ordenadas con beats.
+- ⏱️ El spawn usa tempo musical (60000/BPM * beats por paso).
+- 🎯 El objetivo de cada partida = número de pasos del Game Design (si existe definición).
+- ✅ Se mantienen los fixes: input visible, anti-taps al finalizar (450ms), URL params, teclado 1–4, etc.
 ========================================
 -->
 
@@ -29,7 +28,7 @@ Notas de esta versión (v0.23.0):
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.23.0)</title>
+<title>Routines Flow — TGC (v0.23.4)</title>
 
 <style>
   :root{
@@ -39,13 +38,9 @@ Notas de esta versión (v0.23.0):
     --accent-salto:#10b981;/* salto */
     --accent-barra:#6366f1;/* barra */
     --radius:20px; --safe:max(16px, env(safe-area-inset-bottom, 16px));
-
-    /* v0.23.0 sombras y contraste */
     --shadow: 0 8px 28px rgba(0,0,0,.08);
     --shadow-strong: 0 10px 22px rgba(15,23,42,.18);
     --note-shadow: 0 8px 18px rgba(0,0,0,.18);
-    --contrast-ink: var(--ink);
-    --contrast-bg: #fff;
   }
 
   *{box-sizing:border-box}
@@ -84,10 +79,23 @@ Notas de esta versión (v0.23.0):
   .pill{padding:8px 12px;border-radius:999px;background:#e6e9f2;color:#111827;font-weight:700;font-size:12px;border:1px solid #e5e7eb;cursor:pointer}
   .pill.on{background:#0f172a;color:#fff;border-color:#0f172a}
   .field{display:flex;flex-direction:column;gap:6px}
-  .input{padding:12px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;font-weight:700}
+
+  /* Input SIEMPRE legible */
+  .input{
+    padding:12px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;
+    font-weight:700;color:var(--ink);caret-color:var(--ink);
+    color-scheme: light;
+  }
+  .input::placeholder{ color:#6b7280; opacity:.9 }
+  .input:-webkit-autofill{
+    -webkit-text-fill-color: var(--ink) !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
   .cta{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;border:1px solid #0f172a;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.18)}
   .btn.alt{background:#f3f6fb;color:#0f172a;border-color:#e5e7eb}
+  .btn:disabled{opacity:.55;cursor:default;filter:saturate(.6)}
 
   .leaderboard{margin-top:10px;border:1px solid #eef2f7;border-radius:14px;background:#fff;overflow:hidden}
   .leaderboard h4{margin:0;padding:10px 12px;font-size:13px;background:#f8fafc;border-bottom:1px solid #eef2f7}
@@ -97,7 +105,8 @@ Notas de esta versión (v0.23.0):
   .leaderboard tbody tr:nth-child(even){background:#f8fafc}
   .leaderboard .pos{width:36px;text-align:center}
 
-  .results{position:absolute;inset:0;background:rgba(255,255,255,.96);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:40;padding-bottom:var(--safe)}
+  .results{position:absolute;inset:0;background:rgba(255,255,255,.96);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:40;padding-bottom:var(--safe);opacity:1;transition:opacity .18s ease}
+  .results.locked{pointer-events:none;opacity:.98}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
   .kpi{padding:10px;border:1px solid #e5e7eb;border-radius:12px}
   .ok{background:#ecfdf5}.warn{background:#fff7ed}.bad{background:#fef2f2}
@@ -115,35 +124,13 @@ Notas de esta versión (v0.23.0):
   .pausedMask .box{background:rgba(15,23,42,.9);padding:16px 20px;border-radius:14px;font-weight:900;display:flex;flex-direction:column;gap:10px;align-items:center}
   .pausedMask .box button{border:1px solid #fff;background:#10b981;color:#fff;border-radius:12px;padding:10px 14px;font-weight:900;cursor:pointer}
 
-  /* Alto contraste (toggle) */
-  :root.high-contrast{
-    --contrast-ink:#0b0b0b;
-    --contrast-bg:#ffffff;
-  }
-  :root.high-contrast .panel,
-  :root.high-contrast .card,
-  :root.high-contrast .leaderboard,
-  :root.high-contrast .stage{ background:var(--contrast-bg) !important; color:var(--contrast-ink) !important; }
-  :root.high-contrast .pill{ background:#e2e8f0; color:#0b1220; }
-
-  /* Ahorro (toggle) reduce sombras */
-  :root.power-save .game,
-  :root.power-save .target,
-  :root.power-save .note{ box-shadow:none !important; }
-
-  /* Usuarios con reduce motion: desactivar animaciones decorativas */
   @media (prefers-reduced-motion: reduce){
     .target.bounce{ animation:none !important; }
     .float{ animation:none !important; opacity:1; }
     .hitline-flash{ animation:none !important; }
     *{scroll-behavior:auto;}
   }
-
-  /* dvh fallback para iOS antiguos */
-  @supports(height: 100dvh){
-    .game{ height:calc(100dvh - 16px); }
-  }
-
+  @supports(height: 100dvh){ .game{ height:calc(100dvh - 16px); } }
   @media (max-width:380px){.title{font-size:13px}.chip{font-size:11px;padding:3px 8px}.target b{font-size:18px}}
 </style>
 </head>
@@ -191,14 +178,6 @@ Notas de esta versión (v0.23.0):
         </div>
       </div>
 
-      <!-- v0.23.0: toggles rápidos -->
-      <div class="row">
-        <div class="pillset" aria-label="Ajustes rápidos" role="group">
-          <button class="pill" id="togglePowerSave" type="button">🔋 Ahorro</button>
-          <button class="pill" id="toggleContrast"  type="button">🌓 Alto contraste</button>
-        </div>
-      </div>
-
       <div class="cta">
         <button class="btn alt" id="continueLast" type="button" style="display:none">Continuar último</button>
         <button class="btn" id="startBtn" type="button">Comenzar</button>
@@ -243,7 +222,7 @@ Notas de esta versión (v0.23.0):
 </div>
 
 <script>
-/* ===== Routines Flow — v0.23.0 ===== */
+/* ===== Routines Flow — v0.23.4 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -252,20 +231,119 @@ const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','
 const ORDER=['salto','barra','viga','piso'];
 const APP={salto:{label:'Salto',theme:'salto',color:'#10b981'}, barra:{label:'Barra',theme:'barra',color:'#6366f1'}, viga:{label:'Viga',theme:'viga',color:'#f59e0b'}, piso:{label:'Piso',theme:'piso',color:'#ec4899'}};
 const LEVELS={baby:{label:'Baby Gym',spawnMs:1400,fallMs:5800,target:12}, basico:{label:'Básico',spawnMs:1000,fallMs:3600,target:16}, intermedio:{label:'Intermedio',spawnMs:800,fallMs:2600,target:20}};
-const MOVES={
-  piso:{baby:['Rodada','Vela','Salto estrella','Giro 1/4','Relevé','Paso chassé','Pose final'],basico:['Rondada','Salto split','Giro en passé','Serie chassé','Arabesque','Salto C','Salida'],intermedio:['Rondada-flick','Giro 1/1','Salto split 120°','Serie acro corta','Straddle Jump','Coreo','Salida']},
-  viga:{baby:['Subida segura','Paso lateral','Relevé','Balance T','Giro 1/4','Desmonte abajo'],basico:['Montada frontal','Passe','Pivot 1/2','Scale','Dip','Desmonte'],intermedio:['Montada salto','Pivot 1/1','Cartwheel','Serie equilibrio','Relevé largo','Dismount con giro']},
-  salto:{baby:['Carrera suave','Tabla manos','Bote ligero','Aterrizaje con stick'],basico:['Carrera','Preflight','Repulsión','Aterrizaje controlado'],intermedio:['Carrera rápida','Preflight potente','Bloqueo/Repulsión','Aterrizaje con stick']},
-  barra:{baby:['Colgante','Balanceo suave','Apoyo codo','Bajarse seguro'],basico:['Pullover','Cast pequeño','Tap swing','Desmonte básico'],intermedio:['Cast medio','Tap swing alto','Cambio de agarre','Desmonte con giro']}
+
+/* === Game Design v0.2 ===
+   BPM por aparato/nivel y rutinas ordenadas con beats (1 = un pulso) */
+const GD={
+  version:'0.2',
+  bpm:{
+    piso:{baby:84,  basico:92,  intermedio:104},
+    viga:{baby:70,  basico:76,  intermedio:84},
+    salto:{baby:100, basico:110, intermedio:120},
+    barra:{baby:72,  basico:80,  intermedio:88},
+  },
+  routines:{
+    piso:{
+      baby:[
+        {label:'Rodada al frente', beats:1},
+        {label:'Salto estirado', beats:1},
+        {label:'Estrella', beats:1},
+      ],
+      basico:[
+        {label:'Rodada al frente', beats:1},
+        {label:'Salto estirado', beats:1},
+        {label:'Pivote en relevé con manos en cintura', beats:1},
+        {label:'Estrella', beats:1},
+      ],
+      intermedio:[
+        {label:'Rodada al frente', beats:1},
+        {label:'Rodada atrás', beats:1},
+        {label:'Estrella', beats:1},
+        {label:'Sostener velita (3 seg)', beats:2},
+        {label:'Sostener mesita (3 seg)', beats:2},
+        {label:'Sostener hollow (3 seg)', beats:2},
+        {label:'Girar a sostener arco (3 seg)', beats:2},
+        {label:'Push up a tuck y pararse', beats:2},
+        {label:'2 patadas al frente', beats:2},
+        {label:'2 coupé', beats:2},
+        {label:'Salto tuck', beats:1},
+        {label:'Relevé a pose final', beats:1},
+      ],
+    },
+    viga:{
+      baby:[
+        {label:'Subida segura', beats:1},
+        {label:'Paso lateral', beats:1},
+        {label:'Relevé', beats:1},
+        {label:'Balance T', beats:2},
+        {label:'Giro 1/4', beats:1},
+        {label:'Desmonte abajo', beats:1},
+      ],
+      basico:[
+        {label:'Montada frontal', beats:1},
+        {label:'Passe', beats:1},
+        {label:'Pivot 1/2', beats:1},
+        {label:'Scale', beats:2},
+        {label:'Dip', beats:1},
+        {label:'Desmonte', beats:1},
+      ],
+      intermedio:[
+        {label:'Montada salto', beats:1},
+        {label:'Pivot 1/1', beats:1},
+        {label:'Cartwheel', beats:1},
+        {label:'Serie equilibrio', beats:2},
+        {label:'Relevé largo', beats:2},
+        {label:'Dismount con giro', beats:1},
+      ],
+    },
+    salto:{
+      baby:[
+        {label:'Carrera suave', beats:1},
+        {label:'Tabla manos', beats:1},
+        {label:'Bote ligero', beats:1},
+        {label:'Aterrizaje con stick', beats:1},
+      ],
+      basico:[
+        {label:'Carrera', beats:1},
+        {label:'Preflight', beats:1},
+        {label:'Repulsión', beats:1},
+        {label:'Aterrizaje controlado', beats:1},
+      ],
+      intermedio:[
+        {label:'Carrera rápida', beats:1},
+        {label:'Preflight potente', beats:1},
+        {label:'Bloqueo/Repulsión', beats:1},
+        {label:'Aterrizaje con stick', beats:1},
+      ],
+    },
+    barra:{
+      baby:[
+        {label:'Colgante', beats:1},
+        {label:'Balanceo suave', beats:1},
+        {label:'Apoyo codo', beats:1},
+        {label:'Bajarse seguro', beats:1},
+      ],
+      basico:[
+        {label:'Pullover', beats:1},
+        {label:'Cast pequeño', beats:1},
+        {label:'Tap swing', beats:1},
+        {label:'Desmonte básico', beats:1},
+      ],
+      intermedio:[
+        {label:'Cast medio', beats:1},
+        {label:'Tap swing alto', beats:1},
+        {label:'Cambio de agarre', beats:1},
+        {label:'Desmonte con giro', beats:1},
+      ],
+    }
+  }
 };
 
 /* Geometría */
 const LANES=4, HIT_Y=88, LINE_OFFSET=64, LINE_Y=HIT_Y+LINE_OFFSET, MISS_LINE_Y=HIT_Y-8, LANE_SPAN=560;
 const PERFECT_RADIUS=18, GOOD_RADIUS=40;
 
-/* Flags runtime v0.23.0 */
-let powerSave = LS.get('rf22:power', false);
-let highContrast = LS.get('rf22:contrast', false);
+/* Preferencias del sistema */
 const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* Estado */
@@ -273,7 +351,13 @@ let apparatus=LS.get('rf22:ap','salto');
 let level=LS.get('rf22:lv','baby');
 let running=false, paused=false, ended=false, startTs=null, timeline=0, raf=0;
 let notes=[], hits={perfect:0,good:0,miss:0}, score=0, laneHits=[0,0,0,0];
-let totalTarget=LEVELS[level].target, spawned=0, processed=0, nextSpawnAt=1400, spawnIntervalMs=LEVELS[level].spawnMs;
+let totalTarget=0, spawned=0, processed=0, nextSpawnAt=1400;
+/* Spawn con GD v0.2 */
+let usingGD=false, beatMs=0, stepIdx=0;
+
+/* Anti taps final */
+const END_GRACE_MS = 450;
+let resultsUnlockTimer = 0;
 
 /* Refs UI */
 const lanesWrap=el('lanes'), hitline=el('hitline'), progBar=el('progBar'), pausedMask=el('pausedMask'), pauseBox=el('pauseBox'), resumeBtn=el('resumeBtn');
@@ -310,22 +394,72 @@ function buildLanes(){
 }
 buildLanes();
 
-/* UI Helpers */
+/* Helpers UI */
 function colorizeProgress(){const map={piso:'var(--accent)',viga:'var(--accent-alt)',salto:'var(--accent-salto)',barra:'var(--accent-barra)'};progBar.style.background=getComputedStyle(document.documentElement).getPropertyValue(map[apparatus])||APP[apparatus].color;}
 function refreshBadges(){apparatusLabel.textContent=APP[apparatus].label;levelBadge.textContent=LEVELS[level].label.toUpperCase();colorizeProgress();}
 function updateLaneCounters(onlyLane){if(onlyLane===undefined){for(let l=0;l<LANES;l++){const t=laneEls[l]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[l];}}else{const t=laneEls[onlyLane]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[onlyLane];}}
-function applyModes(){document.documentElement.classList.toggle('power-save', !!powerSave);document.documentElement.classList.toggle('high-contrast', !!highContrast);}
+
+/* Game Design helpers */
+function gdSteps(){
+  const r = GD.routines?.[apparatus]?.[level];
+  return Array.isArray(r) ? r : null;
+}
+function hasGD(){ return !!(GD.bpm?.[apparatus]?.[level] && gdSteps()); }
+function computeBeatMs(){
+  const bpm = GD.bpm?.[apparatus]?.[level] || 0;
+  return bpm ? (60000 / bpm) : 0;
+}
+
+/* Rutina activa y metas */
+function currentMoves(){
+  // Para UI/compat: devuelve labels de la rutina si existe, si no el fallback viejo
+  const steps = gdSteps();
+  if(steps) return steps.map(s=>s.label);
+  // Fallback legacy (no debería usarse cuando hay GD)
+  const MOVES_FALLBACK={
+    piso:{
+      baby:['Rodada al frente','Salto estirado','Estrella'],
+      basico:['Rodada al frente','Salto estirado','Pivote en relevé con manos en cintura','Estrella'],
+      intermedio:['Rodada al frente','Rodada atrás','Estrella','Sostener velita (3 seg)','Sostener mesita (3 seg)','Sostener hollow (3 seg)','Girar a sostener arco (3 seg)','Push up a tuck y pararse','2 patadas al frente','2 coupé','Salto tuck','Relevé a pose final']
+    },
+    viga:{
+      baby:['Subida segura','Paso lateral','Relevé','Balance T','Giro 1/4','Desmonte abajo'],
+      basico:['Montada frontal','Passe','Pivot 1/2','Scale','Dip','Desmonte'],
+      intermedio:['Montada salto','Pivot 1/1','Cartwheel','Serie equilibrio','Relevé largo','Dismount con giro']
+    },
+    salto:{
+      baby:['Carrera suave','Tabla manos','Bote ligero','Aterrizaje con stick'],
+      basico:['Carrera','Preflight','Repulsión','Aterrizaje controlado'],
+      intermedio:['Carrera rápida','Preflight potente','Bloqueo/Repulsión','Aterrizaje con stick']
+    },
+    barra:{
+      baby:['Colgante','Balanceo suave','Apoyo codo','Bajarse seguro'],
+      basico:['Pullover','Cast pequeño','Tap swing','Desmonte básico'],
+      intermedio:['Cast medio','Tap swing alto','Cambio de agarre','Desmonte con giro']
+    }
+  };
+  return (MOVES_FALLBACK[apparatus]&&MOVES_FALLBACK[apparatus][level])?MOVES_FALLBACK[apparatus][level]:[];
+}
+function computeTarget(){
+  const steps = gdSteps();
+  if(steps) return steps.length;
+  return LEVELS[level].target;
+}
+
+/* Progreso */
+function updateProgressBar(){
+  const pct = totalTarget ? Math.min(100, Math.max(0, (processed/totalTarget)*100)) : 0;
+  progBar.style.width = pct.toFixed(2) + '%';
+}
+
+/* UI init */
 function initUI(){
   nameInput.value=LS.get('rf22:name','Gimnasta');
   qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));
   qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));
   refreshBadges();updateLaneCounters();renderLeaderboard();
   continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
-  // toggles
-  document.getElementById('togglePowerSave')?.classList.toggle('on', powerSave);
-  document.getElementById('toggleContrast')?.classList.toggle('on', highContrast);
 }
-applyModes();
 initUI();
 
 /* Leaderboard */
@@ -333,12 +467,6 @@ function lbKey(){return `rf22:lb:${apparatus}:${level}`;}
 function saveLeaderboard(medal,emoji){const k=lbKey();const cur=LS.get(k,[]);cur.push({name:nameInput.value||'Gimnasta',score,medal,medalEmoji:emoji,date:new Date().toISOString()});cur.sort((a,b)=>b.score-a.score);cur.splice(10);LS.set(k,cur);}
 function renderLeaderboard(){if(!lbBody)return;const data=LS.get(lbKey(),[]);lbBody.innerHTML='';data.forEach((r,i)=>{const tr=document.createElement('tr');const premio=(r.medalEmoji||'')+' '+(r.medal?(r.medal[0].toUpperCase()+r.medal.slice(1)):'');tr.innerHTML=`<td class="pos">${i+1}</td><td>${esc(r.name)}</td><td>${r.score}</td><td>${premio}</td><td>${new Date(r.date).toLocaleDateString()}</td>`;lbBody.appendChild(tr);});}
 if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local para este aparato y nivel?')){LS.set(lbKey(),[]);renderLeaderboard();}}}
-
-/* Progreso */
-function updateProgressBar(){
-  const pct = totalTarget ? Math.min(100, Math.max(0, (processed/totalTarget)*100)) : 0;
-  progBar.style.width = pct.toFixed(2) + '%';
-}
 
 /* URL params → ?ap=salto&lv=basico&name=Valentina */
 (function parseParams(){
@@ -353,30 +481,30 @@ function updateProgressBar(){
   }catch(_){}
 })();
 
-/* Spawning helpers considerando powerSave (sin mutar LEVELS) */
-function effectiveSpawnMs(){
-  const base = LEVELS[level].spawnMs;
-  return Math.round(base * (powerSave ? 1.10 : 1));
-}
-function effectiveFallMsBase(){
-  const base = LEVELS[level].fallMs;
-  return Math.round(base * (powerSave ? 1.05 : 1));
-}
-
-/* Notas — una por intervalo; varias visibles por caída */
-function currentMoves(){return (MOVES[apparatus]&&MOVES[apparatus][level])?MOVES[apparatus][level]:MOVES.salto.baby;}
+/* Notas — ordenadas según GD si existe; 1 nota por paso (beats define el intervalo antes del siguiente paso) */
 function genNextNote(timeBase){
   if(spawned>=totalTarget) return [];
-  const moves=currentMoves();
+  const steps = gdSteps();
+  let label='Nota';
+  if(usingGD && steps){
+    const step = steps[stepIdx] || steps[steps.length-1];
+    label = step.label;
+  }else{
+    const moves=currentMoves();
+    label = moves.length ? moves[(spawned)%moves.length] : 'Nota';
+  }
   const lane=Math.floor(Math.random()*LANES);
   const id=(spawned+1);
   spawned++;
-  return [{id,time:timeBase,lane,label:moves[(id+lane)%moves.length],hit:false,el:null}];
+  if(usingGD && steps){
+    stepIdx = Math.min(stepIdx+1, steps.length); // avanza secuencia
+  }
+  return [{id,time:timeBase,lane,label,hit:false,el:null}];
 }
 function fallMsNow(){
-  const base=effectiveFallMsBase();
+  const base=LEVELS[level].fallMs;
   const p=totalTarget?Math.min(1,processed/totalTarget):0;
-  return Math.max(400, base*(1-0.20*p)); // clamp mínimo
+  return Math.max(400, base*(1-0.20*p));
 }
 function noteY(n,now){
   const lead=1100, t0=n.time-lead;
@@ -393,10 +521,17 @@ function loop(ts){
   timeline = now - startTs;
 
   if(!paused){
-    // Generar 1 nota por intervalo espaciado
     while(spawned<totalTarget && timeline>=nextSpawnAt){
+      const steps = gdSteps();
       notes = notes.concat(genNextNote(nextSpawnAt));
-      nextSpawnAt += spawnIntervalMs; // usa intervalo efectivo
+      if(usingGD && steps){
+        const idx = Math.min(spawned-1, steps.length-1);
+        const step = steps[idx];
+        const beats = Math.max(1, Number(step?.beats||1));
+        nextSpawnAt += beats * beatMs;
+      }else{
+        nextSpawnAt += LEVELS[level].spawnMs;
+      }
     }
     updateNotes();
     if(processed>=totalTarget && notes.length===0){ endGame(); return; }
@@ -411,14 +546,26 @@ function startGame(){
   ended=false; running=true; paused=false; pauseBtn.textContent='⏸'; pausedMask.style.display='none';
   LS.set('rf22:name',nameInput.value||'Gimnasta'); LS.set('rf22:ap',apparatus); LS.set('rf22:lv',level);
   hits={perfect:0,good:0,miss:0}; score=0; laneHits=[0,0,0,0];
-  totalTarget=LEVELS[level].target; spawned=0; processed=0;
-  spawnIntervalMs = effectiveSpawnMs();
-  nextSpawnAt = spawnIntervalMs; // primera nota al tamaño del intervalo
+
+  usingGD = hasGD();
+  beatMs = usingGD ? computeBeatMs() : 0;
+  stepIdx = 0;
+
+  totalTarget = computeTarget(); spawned=0; processed=0;
+  if(usingGD){
+    const firstBeats = Math.max(1, (gdSteps()?.[0]?.beats || 1));
+    nextSpawnAt = firstBeats * beatMs; // primera nota tras 1 paso de compás
+  }else{
+    nextSpawnAt = LEVELS[level].spawnMs;
+  }
+
   updateProgressBar();
   updateLaneCounters(); updateHUD();
 
   startTs=null; timeline=0; progBar.style.width='0%';
-  results.style.display='none'; panel.style.display='none';
+  results.style.display='none'; results.classList.remove('locked');
+  [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
+  panel.style.display='none';
   resetLine(); requestAnimationFrame(loop);
 }
 function endGame(){
@@ -430,7 +577,19 @@ function endGame(){
   medalEl.textContent=`${emoji} ${medal[0].toUpperCase()+medal.slice(1)}`;
   rName.textContent=nameInput.value||'Gimnasta';
   rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
-  results.style.display='flex'; saveLeaderboard(medal,emoji); renderLeaderboard(); saveLastRun();
+
+  results.style.display='flex';
+  results.classList.add('locked');
+  [playAgain,nextEvent,toMain].forEach(b=>b.disabled=true);
+  document.activeElement && document.activeElement.blur && document.activeElement.blur();
+
+  clearTimeout(resultsUnlockTimer);
+  resultsUnlockTimer = setTimeout(()=>{
+    results.classList.remove('locked');
+    [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
+  }, END_GRACE_MS);
+
+  saveLeaderboard(medal,emoji); renderLeaderboard(); saveLastRun();
 }
 
 /* Render */
@@ -491,7 +650,7 @@ function saveLastRun(){LS.set('rf22:last:run',{when:Date.now(),apparatus,level,s
 function restoreLastRun(){const r=LS.get('rf22:last:run',null);if(!r)return false;apparatus=r.apparatus||apparatus;level=r.level||level;return true;}
 
 /* Navegación */
-function nextApparatus(){const idx=ORDER.indexOf(apparatus);apparatus=ORDER[(idx+1)%ORDER.length];LS.set('rf22:ap',apparatus);refreshBadges();}
+function nextApparatus(){const idx=ORDER.indexOf(apparatus);apparatus=ORDER[(idx+1)%ORDER.length];LS.set('rf22:ap',aparatus);refreshBadges();}
 function goToMain(){results.style.display='none';panel.style.display='';score=0;hits={perfect:0,good:0,miss:0};updateHUD();}
 
 /* Listeners UI */
@@ -509,9 +668,9 @@ nextEvent.onclick=()=>{nextApparatus();startGame();};
 toMain.onclick=()=>goToMain();
 continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));refreshBadges();startGame();}};
 
-/* Aparato/Nivel */
-apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); renderLeaderboard();},{passive:true});
-lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=LEVELS[level].label.toUpperCase(); totalTarget=LEVELS[level].target; spawnIntervalMs = effectiveSpawnMs(); renderLeaderboard();},{passive:true});
+/* Aparato/Nivel: recalcula meta y tempo al cambiar */
+apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); totalTarget=computeTarget(); renderLeaderboard();},{passive:true});
+lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=LEVELS[level].label.toUpperCase(); totalTarget=computeTarget(); renderLeaderboard();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
 /* Teclado: 1–4 disparan carriles */
@@ -521,30 +680,12 @@ window.addEventListener('keydown',(e)=>{
   if(e.key in map){ e.preventDefault(); judge(map[e.key]); }
 },{passive:false});
 
-/* Toggles rápidos */
-const togglePower = el('togglePowerSave');
-const toggleContrast = el('toggleContrast');
-if(togglePower){
-  togglePower.onclick = () => {
-    powerSave = !powerSave; LS.set('rf22:power', powerSave);
-    togglePower.classList.toggle('on', powerSave); applyModes();
-    // recalcular intervalos si está en menú
-    spawnIntervalMs = effectiveSpawnMs();
-  };
-}
-if(toggleContrast){
-  toggleContrast.onclick = () => {
-    highContrast = !highContrast; LS.set('rf22:contrast', highContrast);
-    toggleContrast.classList.toggle('on', highContrast); applyModes();
-  };
-}
-
 /* Auto-pausa al perder foco */
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) pauseBtn.click(); });
 
 /* Inicial */
 (function(){
-  // Asegura colores de progreso y leaderboard visibles
+  totalTarget = computeTarget();
   colorizeProgress();
   renderLeaderboard();
   continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
