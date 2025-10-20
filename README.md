@@ -1,17 +1,15 @@
-========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.5.0
+Versión: v0.24.5.1
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-19
 
-Novedades v0.24.5.0:
-- Scoring /10.00 usando submovimientos (GD v0.4.1).
-- Bonus Logro (+5% MAX_D) y Penalty Miss Destreza (−10% MAX_D).
-- Bonos de Conexión/Serie aplicados solo con destrezas “logradas”.
-- Panel QA: sección “Scoring (10.0)” (GoodFactor, Bonus, Penalty).
-- Ranking y HUD muestran puntaje con dos decimales.
-
-Depende de: RFRoutines v0.4+ con baseD y pesos normalizados por submov.
-========================================
+Cambios v0.24.5.1:
+- Fix: variables duplicadas (playAgain/nextEvent/toMain).
+- Fix: colorizeProgress usa var(--*) correctamente.
+- Fix: espaciado de notas toma currentSub() (durBeats) para el tempo real.
+- UX: anti-tap final END_GRACE_MS=600ms.
+- Scoring: clamp y redondeo 4 dec antes de UI.
+- Gestos: hold tolerante (+60ms).
+- UI: sub-label a 12px; verBadge seteado una sola vez.
