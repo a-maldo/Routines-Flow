@@ -1,17 +1,18 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.6.1
+Versión: v0.24.6.2
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-20
 
-Cambios clave (v0.24.6.1):
-- Aros por carril (Perfect/Good) del tamaño exacto de la nota (64×64).
-- Todas las notas desaparecen al pasar la línea (post-line).
-- Notas HOLD: mientras están activas (presionadas) se “anclan” antes de la línea;
-  si se sueltan antes de completar, vuelven a caer y se evaluarán al cruzar la línea.
+Cambios clave (v0.24.6.2):
+- Fix MULTI: contador visible muestra restantes (xN → x0=OK) y no “rebota” texto.
+- Swipe: ya no penaliza si hubo toque sin completar el gesto; solo será Miss al cruzar línea.
+- HOLD: anclaje más preciso a 2px por encima de la línea mientras se mantiene presionado.
+- Seguridad post-línea: si el DOM aparece tarde y ya cruzó, se registra Miss inmediatamente (sin parpadeo).
+- Aros por carril: alineación precisa con nota y grosor real de la hitline (64×64, 6px).
 - Se mantienen: rf-v0.4 (tap/hold/swipe/multi), QA/Tuning, Early/Late, anti-mash, grid.
 ========================================
 -->
@@ -25,7 +26,7 @@ Cambios clave (v0.24.6.1):
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light"/>
-<title>Routines Flow — TGC (v0.24.6.1)</title>
+<title>Routines Flow — TGC (v0.24.6.2)</title>
 
 <style>
   :root{
@@ -827,16 +828,16 @@ Cambios clave (v0.24.6.1):
 </script>
 
 <!-- =========================
-     Game runtime (v0.24.6.1)
+     Game runtime (v0.24.6.2)
      ========================= -->
 <script>
-/* ===== Routines Flow — v0.24.6.1 ===== */
+/* ===== Routines Flow — v0.24.6.2 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Versión */
-const GAME_VERSION='v0.24.6.1';
+const GAME_VERSION='v0.24.6.2';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
@@ -845,6 +846,8 @@ const LEVELS={baby:{label:'Baby Gym'}, basico:{label:'Básico'}, intermedio:{lab
 
 /* Geometría y juicio */
 const LANES=4, HIT_Y=88, LINE_OFFSET=64, LINE_Y=HIT_Y+LINE_OFFSET, MISS_LINE_Y=HIT_Y-8, LANE_SPAN=560;
+const NOTE_SIZE = 64;      // coherente con CSS .ring y .note
+const HITLINE_THICK = 6;   // coherente con CSS .hitline-global height
 const SWIPE_MIN_PX=50;
 
 /* Pace tuning por nivel (defaults reajustados) */
@@ -927,10 +930,10 @@ function buildLanes(){
     const sub=document.createElement('div'); sub.className='sub-label'; sub.textContent='';
     const guide=document.createElement('div'); guide.className='swipe-guide'; guide.textContent='';
 
-    // Aros (64x64) centrados en la línea (top del aro = LINE_Y-32; compensamos hitline -3)
+    // Aros (64x64) centrados en la línea
     const ringPerfect=document.createElement('div'); ringPerfect.className='ring perfect';
     const ringGood   =document.createElement('div'); ringGood.className='ring good';
-    const ringBottom = (LINE_Y - 32) - 3;
+    const ringBottom = (LINE_Y - (NOTE_SIZE/2)) - (HITLINE_THICK/2);
     ringPerfect.style.bottom = ringBottom + 'px';
     ringGood.style.bottom    = ringBottom + 'px';
 
@@ -1092,15 +1095,16 @@ function genNextNote(timeBase){
   currSubIndex++; if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
 
   const g = glyphFor(tipo, needCount, swipeDir);
+  const multiMeta = (tipo==='multi') ? `<div class="meta">x${needCount}</div>` : `<div class="meta">${g.meta}</div>`;
   return [{
     id:spawned,time:timeBase,lane,label,tipo,windowMs,need:needCount,swipeDir,
     dIdx,sIdx,
-    hit:false,inProgress:false,  // inProgress se usa en HOLD activo
+    hit:false,inProgress:false,
     hold:{start:0,durMs:0},
     multi:{count:0,deadline:0},
     precueShown:false,
     el:null,
-    render:`<div class="glyph">${g.icon}</div><div class="meta">${g.meta}</div>${tipo==='hold'?'<div class="holdbar"><i style="width:100%"></i></div>':''}`
+    render:`<div class="glyph">${g.icon}</div>${multiMeta}${tipo==='hold'?'<div class="holdbar"><i style="width:100%"></i></div>':''}`
   }];
 }
 
@@ -1248,9 +1252,10 @@ function endGame(){
 }
 
 /* Render + precue + hold HUD + guía swipe */
-/* Cambios: 
+/* Cambios en esta versión:
    - TODAS las notas desaparecen al pasar la línea (si no se han registrado).
-   - HOLD activo: mientras esté inProgress (presionado), la nota se ANCLA por encima de la línea; al soltar, vuelve a caer. */
+   - HOLD activo: mientras esté inProgress (presionado), la nota se ANCLA justo 2px antes de la línea; al soltar, vuelve a caer.
+   - Seguridad: si el DOM aparece tarde y ya cruzó la línea, se registra Miss sin parpadeo. */
 function updateNotes(){
   const now=timeline; const keep=[];
   const pxPerMs = LANE_SPAN / fallMsNow();
@@ -1276,16 +1281,16 @@ function updateNotes(){
       else { guide.style.opacity='0'; }
     }
 
-    // HOLD anclado: si está en progreso (presionado), no cruza la línea — se clava justo encima
+    // HOLD anclado: si está en progreso (presionado), no cruza la línea — se clava justo encima (2px)
     if(n.inProgress && n.tipo==='hold'){
-      y = Math.max(y, LINE_Y + 6); // “antes de la línea” (arriba)
+      y = Math.max(y, LINE_Y + 2);
       if(n.el){
         const pct = Math.max(0, Math.min(1, (now - n.hold.start) / n.hold.durMs));
         const bar = n.el.querySelector('.holdbar > i'); if(bar){ bar.style.width = ((1-pct)*100).toFixed(1)+'%'; }
       }
     }
 
-    // Desaparición post-linea: si pasa la línea (pequeña tolerancia) y NO está en hold activo → Miss y remove
+    // Desaparición post-línea: si pasa la línea y NO está en hold activo → Miss y remove
     const pastLine = (y <= MISS_LINE_Y);
     if(!n.hit && pastLine && !(n.inProgress && n.tipo==='hold')){
       registerMiss(n);
@@ -1297,6 +1302,12 @@ function updateNotes(){
         const b=document.createElement('div'); b.className=`note ${APP[apparatus].theme}`; b.innerHTML=n.render||''; 
         b.addEventListener('pointerdown',e=>{e.preventDefault();onDown(n.lane,e);},{passive:false});
         laneEls[n.lane].appendChild(b); n.el=b;
+        // Seguridad: si ya pasó la línea en este mismo frame, evita parpadeo
+        const yNow = noteY(n, timeline);
+        if(yNow <= MISS_LINE_Y && !(n.inProgress && n.tipo==='hold')){
+          registerMiss(n);
+          continue;
+        }
       }
       n.el.style.bottom=Math.max(10,y)+'px';
       keep.push(n);
@@ -1329,14 +1340,19 @@ function onDown(l,e){
     note.inProgress=true; st.holding=note;
     note.hold.start = adjustedNow();
     note.hold.durMs = Math.max(1, note.need) * beatMs;
-    // Anclado visual se maneja en updateNotes (clamp y)
   }else if(note.tipo==='tap'){
     finalizeHit(note, 'tap');
   }else if(note.tipo==='multi'){
     const ok = tryJudgeWindow(note,true); if(!ok){ st.lastTapNoHit = now; return; }
     if(note.multi.count===0){ note.multi.deadline = adjustedNow() + (Math.max(1,note.need) * beatMs); }
     note.multi.count++;
-    if(note.el && note.tipo==='multi'){ const meta=note.el.querySelector('.meta'); if(meta){ meta.textContent = 'x'+Math.max(0, note.need - note.multi.count + 1); } }
+    if(note.el){
+      const meta=note.el.querySelector('.meta');
+      if(meta){
+        const remaining = Math.max(0, (note.need||2) - note.multi.count);
+        meta.textContent = remaining>0 ? ('x'+remaining) : 'OK';
+      }
+    }
     if(note.multi.count >= (note.need||2)){ finalizeHit(note, 'multi'); }
   }
 }
@@ -1364,9 +1380,13 @@ function onUp(l,_e){
   }
 
   const note = pickCand(l);
-  if(note && note.tipo==='swipe' && st.swipe){
-    const ok = tryJudgeWindow(note,true) && swipeMatches(note, st.swipeDir);
-    if(ok) finalizeHit(note,'swipe'); else registerMiss(note);
+  if(note && note.tipo==='swipe'){
+    // Solo evaluamos si se realizó gesto; si no, ignoramos este toque (no Miss aquí)
+    if(st.swipe){
+      const ok = tryJudgeWindow(note,true) && swipeMatches(note, st.swipeDir);
+      if(ok) finalizeHit(note,'swipe');
+      // Si no es ok: no penalizamos aquí; la nota seguirá y hará Miss al cruzar línea.
+    }
   }else if(note && note.tipo==='tap'){
     if(tryJudgeWindow(note,true)) finalizeHit(note,'tap'); else registerMiss(note);
   }
@@ -1477,7 +1497,7 @@ addEventListener('keydown',(e)=>{
   if(key in map){
     const lane=map[key]; KB.lastLane=lane; e.preventDefault();
     if(KB.hold){ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); }
-    else if(KB.swipe){ const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){ const dir = KB.swipeDir || 'up'; if( tryJudgeWindow(cand,true) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } else { registerMiss(cand); } } }
+    else if(KB.swipe){ const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){ const dir = KB.swipeDir || 'up'; if( tryJudgeWindow(cand,true) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } } }
     else{ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
   }
 },{passive:false});
