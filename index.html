@@ -1,15 +1,21 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.5.1
+Versión: v0.24.6
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
-Fecha: 2025-10-19
+Fecha: 2025-10-20
 
-Integración:
-- Se implementa rf-v0.4.js (RFRoutines v0.4) con submovimientos y acciones tap/hold/swipe/multi.
-- Se elimina el fallback mínimo anterior.
+Cambios clave (v0.24.6):
+- Full-lane input (opción QA) + anti-mash.
+- Halos de ventana Perfect/Good dinámicos en la línea.
+- Feedback Early/Late con error en ms.
+- Calibración de latencia (Offset ms).
+- Precues: guía de swipe y tip “APUNTA A LA LÍNEA”.
+- Beat grid sutil.
+- Tuning por defecto: más espacio entre notas en Baby/Básico.
+- rf-v0.4 (tap/hold/swipe/multi) integrado.
 ========================================
 -->
 
@@ -22,7 +28,7 @@ Integración:
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light"/>
-<title>Routines Flow — TGC (v0.24.5.1)</title>
+<title>Routines Flow — TGC (v0.24.6)</title>
 
 <style>
   :root{
@@ -35,6 +41,7 @@ Integración:
     --shadow: 0 8px 28px rgba(0,0,0,.08);
     --shadow-strong: 0 10px 22px rgba(15,23,42,.18);
     --note-shadow: 0 8px 18px rgba(0,0,0,.18);
+    --grid-color: rgba(148,163,184,.20);
   }
   *{box-sizing:border-box}
   html,body{overscroll-behavior:none; touch-action:manipulation;}
@@ -49,6 +56,13 @@ Integración:
   .stage{position:absolute;left:10px;right:10px;top:56px;bottom:130px;border-radius:18px;border:1px solid #fff;background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.72));overflow:hidden}
   .lanes{position:absolute;inset:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .lane{position:relative;background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:16px;overflow:visible}
+
+  /* Beat grid sutil */
+  .lane::after{
+    content:""; position:absolute; inset:0;
+    background-image: repeating-linear-gradient(to top, var(--grid-color), var(--grid-color) 1px, transparent 1px, transparent 26px);
+    pointer-events:none; border-radius:16px;
+  }
 
   /* Etiquetas visibles */
   .note-label{
@@ -69,6 +83,9 @@ Integración:
   @keyframes precueBlink{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
   .sub-label.precue{animation:precueBlink .6s ease 1}
 
+  /* Guía de swipe */
+  .swipe-guide{position:absolute;left:50%;transform:translateX(-50%);top:58px;font-size:18px;font-weight:900;color:#0f172a;opacity:.0;transition:opacity .12s ease;pointer-events:none;z-index:6}
+
   /* Nota con acción y HUD hold */
   .note{position:absolute;left:50%;transform:translateX(-50%);border-radius:16px;color:#fff;font-weight:800;font-size:13px;padding:12px 16px;box-shadow:var(--note-shadow);border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;width:64px;min-height:48px;display:flex;flex-direction:column;align-items:center;gap:6px}
   .note .glyph{font-size:22px;line-height:1}
@@ -87,6 +104,11 @@ Integración:
   .hitline-perfect{background:#22c55e!important}.hitline-good{background:#eab308!important}.hitline-miss{background:#ef4444!important}
   @keyframes flashLine{0%{box-shadow:0 0 0 0 rgba(255,255,255,.45)}100%{box-shadow:0 0 20px 8px rgba(255,255,255,0)}}
   .hitline-flash{animation:flashLine .28s ease}
+
+  /* Halos dinámicos alrededor de la hitline */
+  .halo{position:absolute;left:10px;right:10px;border-radius:999px;pointer-events:none;z-index:16}
+  .halo.perfect{border:2px dashed rgba(34,197,94,.45)}
+  .halo.good{border:2px solid rgba(234,179,8,.28)}
 
   .panel{position:absolute;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -12px 24px rgba(0,0,0,.06);border-top:1px solid #eef2f7;padding:14px;z-index:25;padding-bottom:var(--safe)}
   .card{background:#fff;border:1px solid #eef2f7;border-radius:16px;padding:12px}
@@ -124,9 +146,9 @@ Integración:
   .progress{position:absolute;left:12px;right:12px;bottom:12px;height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden}
   .progress>div{height:100%;width:0%}
 
-  .float{position:absolute;left:50%;transform:translateX(-50%);font-weight:900;font-size:12px;padding:4px 8px;border-radius:999px;color:#fff;pointer-events:none;opacity:.95;animation:upFade .6s ease-out forwards}
+  .float{position:absolute;left:50%;transform:translateX(-50%);font-weight:900;font-size:12px;padding:4px 8px;border-radius:999px;color:#fff;pointer-events:none;opacity:.95;animation:upFade .8s ease-out forwards}
   .float.perfect{background:#22c55e}.float.good{background:#f59e0b}.float.miss{background:#ef4444}
-  @keyframes upFade{0%{opacity:0;transform:translate(-50%,6px)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-28px)}}
+  @keyframes upFade{0%{opacity:0;transform:translate(-50%,6px)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-32px)}}
 
   .pausedMask{position:absolute;inset:0;background:rgba(15,23,42,.35);color:#fff;display:none;align-items:center;justify-content:center;z-index:35;backdrop-filter:blur(1px)}
   .pausedMask .box{background:rgba(15,23,42,.9);padding:16px 20px;border-radius:14px;font-weight:900;display:flex;flex-direction:column;gap:10px;align-items:center}
@@ -145,12 +167,17 @@ Integración:
   .qaPanel h3{margin:4px 0 10px 0;font-size:16px}
   .qaGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .qaCard{border:1px solid #e5e7eb;border-radius:12px;padding:10px}
-  .qaRow{display:grid;grid-template-columns:1fr 92px;gap:8px;align-items:center;margin:6px 0}
+  .qaRow{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;margin:6px 0}
   .qaRow input[type="range"]{width:100%}
   .qaSub{font-size:12px;color:#475569}
   .qaActions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
   .qaBtn{background:#0f172a;color:#fff;border:1px solid #0f172a;border-radius:10px;padding:10px 12px;font-weight:900;cursor:pointer}
   .qaBtn.alt{background:#f3f6fb;color:#0f172a;border-color:#e5e7eb}
+
+  /* Tip "Apunta a la línea" */
+  .aimTip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(88px + 64px + 22px); 
+    background:#111827;color:#fff;padding:6px 10px;border-radius:10px;font-size:12px;font-weight:900;z-index:18;box-shadow:0 6px 16px rgba(0,0,0,.18);opacity:0;transition:opacity .2s ease}
+  .aimTip.on{opacity:.95}
 </style>
 </head>
 <body>
@@ -174,6 +201,9 @@ Integración:
   <div class="stage">
     <div class="lanes" id="lanes"></div>
     <div class="hitline-global" id="hitline"></div>
+    <div class="halo perfect" id="haloPerfect"></div>
+    <div class="halo good" id="haloGood"></div>
+    <div class="aimTip" id="aimTip">APUNTA A LA LÍNEA ⬇️</div>
   </div>
 
   <div class="panel" id="panel">
@@ -248,10 +278,10 @@ Integración:
     <div class="helpBox">
       <h3>¿Cómo jugar?</h3>
       <div class="helpList">
-        <div class="helpItem"><span class="helpKbd">👆 Tap</span><span>Toca cuando la nota pasa por la línea.</span></div>
-        <div class="helpItem"><span class="helpKbd">⏱ Hold</span><span>Mantén hasta vaciar la barra.</span></div>
+        <div class="helpItem"><span class="helpKbd">👆 Tap</span><span>Toca cuando la nota cruza la línea.</span></div>
+        <div class="helpItem"><span class="helpKbd">⏱ Hold</span><span>Mantén en la línea hasta vaciar la barra.</span></div>
         <div class="helpItem"><span class="helpKbd">⇧/⇩/⇦/⇨ Swipe</span><span>Desliza en la dirección pedida.</span></div>
-        <div class="helpItem"><span class="helpKbd">✚ xN Multi</span><span>Da N toques dentro de la ventana.</span></div>
+        <div class="helpItem"><span class="helpKbd">✚ xN Multi</span><span>Da N toques dentro del tiempo.</span></div>
       </div>
       <button class="helpClose" id="helpClose">Entendido</button>
     </div>
@@ -264,23 +294,39 @@ Integración:
       <div class="qaGrid">
         <!-- Ritmo -->
         <div class="qaCard">
+          <div><b>Entrada</b> <span class="qaSub">Toque en carril o botón</span></div>
+          <div class="qaRow">
+            <label>Modo</label>
+            <select id="qa_inputMode">
+              <option value="full">Full-lane (recomendado)</option>
+              <option value="button">Botón</option>
+            </select>
+          </div>
+          <div class="qaRow">
+            <label>Offset (ms)</label>
+            <input type="range" min="-150" max="150" step="1" id="qa_offset">
+            <span id="qa_offset_val">0</span>
+          </div>
+        </div>
+
+        <div class="qaCard">
           <div><b>Ritmo · Baby</b> <span class="qaSub">Aprendizaje</span></div>
-          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_baby_beatMult"><span id="qa_baby_beatMult_val">1.55</span></div>
-          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1500" step="10" id="qa_baby_minGapMs"><span id="qa_baby_minGapMs_val">900</span></div>
-          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_baby_windowMult"><span id="qa_baby_windowMult_val">1.18</span></div>
-          <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_baby_jitter"><span id="qa_baby_jitter_val">0.12</span></div>
+          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_baby_beatMult"><span id="qa_baby_beatMult_val">1.60</span></div>
+          <div class="qaRow"><label>minGapMs</label><input type="range" min="500" max="1600" step="10" id="qa_baby_minGapMs"><span id="qa_baby_minGapMs_val">1050</span></div>
+          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.6" step="0.01" id="qa_baby_windowMult"><span id="qa_baby_windowMult_val">1.22</span></div>
+          <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_baby_jitter"><span id="qa_baby_jitter_val">0.10</span></div>
         </div>
         <div class="qaCard">
           <div><b>Ritmo · Básico</b></div>
-          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_basico_beatMult"><span id="qa_basico_beatMult_val">1.22</span></div>
-          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1200" step="10" id="qa_basico_minGapMs"><span id="qa_basico_minGapMs_val">700</span></div>
-          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_basico_windowMult"><span id="qa_basico_windowMult_val">1.00</span></div>
+          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_basico_beatMult"><span id="qa_basico_beatMult_val">1.25</span></div>
+          <div class="qaRow"><label>minGapMs</label><input type="range" min="500" max="1400" step="10" id="qa_basico_minGapMs"><span id="qa_basico_minGapMs_val">850</span></div>
+          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_basico_windowMult"><span id="qa_basico_windowMult_val">1.05</span></div>
           <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_basico_jitter"><span id="qa_basico_jitter_val">0.10</span></div>
         </div>
         <div class="qaCard">
           <div><b>Ritmo · Intermedio</b></div>
           <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_intermedio_beatMult"><span id="qa_intermedio_beatMult_val">1.00</span></div>
-          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1000" step="10" id="qa_intermedio_minGapMs"><span id="qa_intermedio_minGapMs_val">560</span></div>
+          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1200" step="10" id="qa_intermedio_minGapMs"><span id="qa_intermedio_minGapMs_val">560</span></div>
           <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_intermedio_windowMult"><span id="qa_intermedio_windowMult_val">0.95</span></div>
           <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_intermedio_jitter"><span id="qa_intermedio_jitter_val">0.08</span></div>
         </div>
@@ -291,13 +337,7 @@ Integración:
           <div class="qaRow"><label>GoodFactor</label><input type="range" min="0.70" max="0.95" step="0.01" id="qa_score_good"><span id="qa_score_good_val">0.80</span></div>
           <div class="qaRow"><label>Bonus Logro</label><input type="range" min="0.00" max="0.10" step="0.01" id="qa_score_bonus"><span id="qa_score_bonus_val">0.05</span></div>
           <div class="qaRow"><label>Penalty Miss</label><input type="range" min="0.05" max="0.20" step="0.01" id="qa_score_penalty"><span id="qa_score_penalty_val">0.10</span></div>
-          <div class="qaSub">Los bonos de conexión/serie usan los valores del GD.</div>
-        </div>
-
-        <!-- Info -->
-        <div class="qaCard">
-          <div><b>Notas</b></div>
-          <div class="qaSub">• Score es /10.00. Cada submov pesa por su destreza (baseD) y su peso interno.<br/>• “Lograda” = sin Miss. Logro suma bonus; si hubo Miss, aplica penalty.<br/>• Bonos entre destrezas se suman solo si ambas están “logradas”.</div>
+          <div class="qaSub">Bonos de conexión/serie usan los valores del GD.</div>
         </div>
       </div>
       <div class="qaActions">
@@ -315,10 +355,11 @@ Integración:
      rf-v0.4.js (RFRoutines v0.4)
      ========================= -->
 <script>
-/*
- * Routine Flow — Rutinas TGC (Piso, Salto, Barra, Viga)
- * rf-v0.4.js — Oficial TGC · con submovimientos y acciones (tap/hold/swipe/multi)
- */
+// ======================================================
+// Routine Flow — Rutinas TGC (Piso, Salto, Barra, Viga)
+// v0.4 (Oficial TGC · piloto) — con submovimientos y tipos
+// ======================================================
+
 (function(global){
   // Utils
   const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
@@ -328,7 +369,7 @@ Integración:
     dest.submovs.forEach(s=>s.peso=+(((s.peso??0)/total).toFixed(2)));
     return dest;
   };
-  const T = (id,nombre,baseD,subs)=>normPesos({id,nombre,baseD,submovs:subs});
+  const T=(id,nombre,baseD,subs)=>normPesos({id,nombre,baseD,submovs:subs});
 
   // ----------------------------------------------------
   // PISO
@@ -339,7 +380,7 @@ Integración:
       destrezas:[
         T("rodada-frente","Rodada al frente",0.20,[
           {id:"rodada-entrada",tipo:"tap",windowMs:100,peso:0.30},
-          {id:"rodada-roll",tipo:"swipe",durBeats:1,windowMs:120,peso:0.40,swipeDir:"up"},
+          {id:"rodada-roll",tipo:"slide",durBeats:1,windowMs:120,peso:0.40},
           {id:"rodada-salida",tipo:"tap",windowMs:100,peso:0.30}
         ]),
         T("salto-estirado","Salto estirado",0.20,[
@@ -365,7 +406,7 @@ Integración:
       destrezas:[
         T("rodada-frente","Rodada al frente",0.25,[
           {id:"rodada-entrada",tipo:"tap",windowMs:100,peso:0.30},
-          {id:"rodada-roll",tipo:"swipe",durBeats:1,windowMs:120,peso:0.40,swipeDir:"up"},
+          {id:"rodada-roll",tipo:"slide",durBeats:1,windowMs:120,peso:0.40},
           {id:"rodada-salida",tipo:"tap",windowMs:100,peso:0.30}
         ]),
         T("salto-estirado","Salto estirado",0.25,[
@@ -375,7 +416,7 @@ Integración:
         ]),
         T("pivot-releve-cintura","Pivote en relevé (manos en cintura)",0.35,[
           {id:"pivot-prep",tipo:"tap",windowMs:100,peso:0.20},
-          {id:"pivot-giro",tipo:"swipe",durBeats:1,windowMs:120,peso:0.60,swipeDir:"right"},
+          {id:"pivot-giro",tipo:"slide",durBeats:1,windowMs:120,peso:0.60},
           {id:"pivot-fin",tipo:"tap",windowMs:100,peso:0.20}
         ]),
         T("estrella","Estrella",0.40,[
@@ -396,12 +437,12 @@ Integración:
       destrezas:[
         T("rodada-frente","Rodada al frente",0.30,[
           {id:"rodada-entrada",tipo:"tap",windowMs:95,peso:0.30},
-          {id:"rodada-roll",tipo:"swipe",durBeats:1,windowMs:115,peso:0.40,swipeDir:"up"},
+          {id:"rodada-roll",tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
           {id:"rodada-salida",tipo:"tap",windowMs:95,peso:0.30}
         ]),
         T("rodada-atras","Rodada atrás",0.40,[
           {id:"atras-entrada",tipo:"tap",windowMs:95,peso:0.30},
-          {id:"atras-roll",tipo:"swipe",durBeats:1,windowMs:115,peso:0.40,swipeDir:"down"},
+          {id:"atras-roll",tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
           {id:"atras-salida",tipo:"tap",windowMs:95,peso:0.30}
         ]),
         T("estrella","Estrella",0.40,[
@@ -427,13 +468,13 @@ Integración:
         ]),
         T("arco","Girar a sostener arco (3 s)",0.35,[
           {id:"arco-prep",tipo:"tap",windowMs:95,peso:0.15},
-          {id:"arco-giro",tipo:"swipe",durBeats:1,windowMs:115,peso:0.25,swipeDir:"right"},
+          {id:"arco-giro",tipo:"slide",durBeats:1,windowMs:115,peso:0.25},
           {id:"arco-hold",tipo:"hold",durBeats:6,windowMs:115,peso:0.40},
           {id:"arco-fin",tipo:"tap",windowMs:95,peso:0.20}
         ]),
         T("pushup-tuck-stand","Push up a tuck y pararse",0.35,[
           {id:"pushup",tipo:"hold",durBeats:1,windowMs:115,peso:0.35},
-          {id:"tuck",tipo:"swipe",durBeats:1,windowMs:115,peso:0.35,swipeDir:"up"},
+          {id:"tuck",tipo:"slide",durBeats:1,windowMs:115,peso:0.35},
           {id:"stand",tipo:"tap",windowMs:95,peso:0.30}
         ]),
         T("patadas-front-2","2 patadas al frente",0.25,[
@@ -464,7 +505,7 @@ Integración:
   };
 
   // ----------------------------------------------------
-  // SALTO
+  // SALTO (Vault)
   // ----------------------------------------------------
   const SALTO = {
     Baby:{
@@ -484,9 +525,13 @@ Integración:
           {id:"aire",tipo:"hold",durBeats:1,windowMs:120,peso:0.40},
           {id:"caida",tipo:"tap",windowMs:100,peso:0.30}
         ]),
-        T("stick","Stick",0.15,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00} ])
+        T("stick","Stick",0.15,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00}
+        ])
       ],
-      bonos:[ {tipo:"conexion",desde:"salto-estirado",hasta:"stick",valor:0.10} ]
+      bonos:[
+        {tipo:"conexion",desde:"salto-estirado",hasta:"stick",valor:0.10}
+      ]
     },
 
     Basico:{
@@ -501,9 +546,13 @@ Integración:
           {id:"aire",tipo:"hold",durBeats:1,windowMs:115,peso:0.35},
           {id:"caida",tipo:"tap",windowMs:95,peso:0.30}
         ]),
-        T("stick","Stick",0.20,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00} ])
+        T("stick","Stick",0.20,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00}
+        ])
       ],
-      bonos:[ {tipo:"conexion",desde:"salto-estirado",hasta:"stick",valor:0.10} ]
+      bonos:[
+        {tipo:"conexion",desde:"salto-estirado",hasta:"stick",valor:0.10}
+      ]
     },
 
     Intermedio:{
@@ -518,23 +567,29 @@ Integración:
           {id:"aire",tipo:"hold",durBeats:1,windowMs:110,peso:0.35},
           {id:"caida",tipo:"tap",windowMs:90,peso:0.30}
         ]),
-        T("stick","Stick",0.20,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:110,peso:1.00} ]),
+        T("stick","Stick",0.20,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:110,peso:1.00}
+        ]),
         T("tripode","Posición de trípode",0.25,[
           {id:"apoyo-cabeza-manos",tipo:"tap",windowMs:90,peso:0.40},
           {id:"alinear",tipo:"hold",durBeats:2,windowMs:110,peso:0.60}
         ]),
-        T("empujar-suelo","Empujarse del suelo",0.20,[ {id:"push",tipo:"tap",windowMs:90,peso:1.00} ]),
+        T("empujar-suelo","Empujarse del suelo",0.20,[
+          {id:"push",tipo:"tap",windowMs:90,peso:1.00}
+        ]),
         T("acostar-espalda","Acostarse boca arriba",0.20,[
-          {id:"caida-controlada",tipo:"swipe",durBeats:1,windowMs:110,peso:0.50,swipeDir:"down"},
+          {id:"caida-controlada",tipo:"slide",durBeats:1,windowMs:110,peso:0.50},
           {id:"fijar-linea",tipo:"hold",durBeats:1,windowMs:110,peso:0.50}
         ])
       ],
-      bonos:[ {tipo:"serie",desde:"tripode",hasta:"acostar-espalda",valor:0.20} ]
+      bonos:[
+        {tipo:"serie",desde:"tripode",hasta:"acostar-espalda",valor:0.20}
+      ]
     }
   };
 
   // ----------------------------------------------------
-  // BARRA
+  // BARRA (Low/Uneven Bar)
   // ----------------------------------------------------
   const BARRA = {
     Baby:{
@@ -545,14 +600,20 @@ Integración:
           {id:"swing-1",tipo:"hold",durBeats:1,windowMs:130,peso:0.60},
           {id:"control",tipo:"tap",windowMs:110,peso:0.20}
         ]),
-        T("balanceo-2-tuck","Balanceo 2 en tuck",0.20,[ {id:"swing-2",tipo:"hold",durBeats:1,windowMs:130,peso:1.00} ]),
-        T("balanceo-3-tuck","Balanceo 3 en tuck",0.20,[ {id:"swing-3",tipo:"hold",durBeats:1,windowMs:130,peso:1.00} ]),
+        T("balanceo-2-tuck","Balanceo 2 en tuck",0.20,[
+          {id:"swing-2",tipo:"hold",durBeats:1,windowMs:130,peso:1.00}
+        ]),
+        T("balanceo-3-tuck","Balanceo 3 en tuck",0.20,[
+          {id:"swing-3",tipo:"hold",durBeats:1,windowMs:130,peso:1.00}
+        ]),
         T("saludo-final","Saludo final",0.15,[
           {id:"soltar",tipo:"tap",windowMs:110,peso:0.40},
           {id:"saludo",tipo:"tap",windowMs:110,peso:0.60}
         ])
       ],
-      bonos:[ {tipo:"serie",desde:"balanceo-1-tuck",hasta:"balanceo-3-tuck",valor:0.20} ]
+      bonos:[
+        {tipo:"serie",desde:"balanceo-1-tuck",hasta:"balanceo-3-tuck",valor:0.20}
+      ]
     },
 
     Basico:{
@@ -564,11 +625,11 @@ Integración:
         ]),
         ...[1,2,3,4,5].map(n=>T(`cast-${n}`,`Cast ${n}`,0.25,[
           {id:`cast-${n}-prep`,tipo:"tap",windowMs:110,peso:0.30},
-          {id:`cast-${n}-bombeo`,tipo:"swipe",durBeats:1,windowMs:120,peso:0.40,swipeDir:"up"},
+          {id:`cast-${n}-bombeo`,tipo:"slide",durBeats:1,windowMs:120,peso:0.40},
           {id:`cast-${n}-fin`,tipo:"tap",windowMs:110,peso:0.30}
         ])),
         T("salida-atras","Salida hacia atrás",0.35,[
-          {id:"underswing",tipo:"swipe",durBeats:1,windowMs:120,peso:0.60,swipeDir:"down"},
+          {id:"underswing",tipo:"slide",durBeats:1,windowMs:120,peso:0.60},
           {id:"stick",tipo:"tap",windowMs:110,peso:0.40}
         ])
       ],
@@ -587,12 +648,12 @@ Integración:
         ]),
         ...[1,2,3,4,5].map(n=>T(`cast-${n}`,`Cast ${n}`,0.30,[
           {id:`cast-${n}-prep`,tipo:"tap",windowMs:100,peso:0.30},
-          {id:`cast-${n}-bombeo`,tipo:"swipe",durBeats:1,windowMs:115,peso:0.40,swipeDir:"up"},
+          {id:`cast-${n}-bombeo`,tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
           {id:`cast-${n}-fin`,tipo:"tap",windowMs:100,peso:0.30}
         ])),
         T("media-vuelta-frente","Media vuelta al frente",0.40,[
           {id:"turn-prep",tipo:"tap",windowMs:100,peso:0.30},
-          {id:"turn-ejec",tipo:"swipe",durBeats:1,windowMs:115,peso:0.40,swipeDir:"right"},
+          {id:"turn-ejec",tipo:"slide",durBeats:1,windowMs:115,peso:0.40},
           {id:"turn-fin",tipo:"tap",windowMs:100,peso:0.30}
         ]),
         T("pullup-tuck-3s","Sostener pull up en tuck (3 seg)",0.45,[
@@ -609,7 +670,7 @@ Integración:
   };
 
   // ----------------------------------------------------
-  // VIGA
+  // VIGA (Beam)
   // ----------------------------------------------------
   const VIGA = {
     Baby:{
@@ -620,17 +681,21 @@ Integración:
           {id:"patada-2",tipo:"tap",windowMs:110,peso:0.50}
         ]),
         T("caminata-lateral","Caminata lateral",0.20,[
-          {id:"paso-1",tipo:"swipe",durBeats:1,windowMs:130,peso:0.50,swipeDir:"right"},
-          {id:"paso-2",tipo:"swipe",durBeats:1,windowMs:130,peso:0.50,swipeDir:"left"}
+          {id:"paso-1",tipo:"slide",durBeats:1,windowMs:130,peso:0.50},
+          {id:"paso-2",tipo:"slide",durBeats:1,windowMs:130,peso:0.50}
         ]),
         T("salto-lateral","Salto lateral",0.25,[
           {id:"batida",tipo:"tap",windowMs:110,peso:0.35},
           {id:"aire",tipo:"hold",durBeats:1,windowMs:130,peso:0.35},
           {id:"caida",tipo:"tap",windowMs:110,peso:0.30}
         ]),
-        T("stick","Stick",0.15,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00} ])
+        T("stick","Stick",0.15,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00}
+        ])
       ],
-      bonos:[ {tipo:"conexion",desde:"salto-lateral",hasta:"stick",valor:0.10} ]
+      bonos:[
+        {tipo:"conexion",desde:"salto-lateral",hasta:"stick",valor:0.10}
+      ]
     },
 
     Basico:{
@@ -641,25 +706,33 @@ Integración:
           {id:"equilibrio",tipo:"hold",durBeats:1,windowMs:120,peso:0.60}
         ]),
         T("pasar-pierna","Pasar pierna sobre la viga",0.25,[
-          {id:"paso",tipo:"swipe",durBeats:1,windowMs:120,peso:1.00,swipeDir:"right"}
+          {id:"paso",tipo:"slide",durBeats:1,windowMs:120,peso:1.00}
         ]),
         T("sentar-straddle","Sentarse en straddle",0.20,[
           {id:"sentar",tipo:"tap",windowMs:110,peso:0.50},
           {id:"alinear",tipo:"hold",durBeats:1,windowMs:120,peso:0.50}
         ]),
-        T("pies-atras","Poner pies atrás",0.20,[ {id:"apoyo-pies",tipo:"tap",windowMs:110,peso:1.00} ]),
+        T("pies-atras","Poner pies atrás",0.20,[
+          {id:"apoyo-pies",tipo:"tap",windowMs:110,peso:1.00}
+        ]),
         T("pararse","Pararse sobre la viga",0.25,[
           {id:"subida",tipo:"tap",windowMs:110,peso:0.50},
           {id:"estabilizar",tipo:"hold",durBeats:1,windowMs:120,peso:0.50}
         ]),
-        ...[1,2,3,4].map(n=>T(`patada-frente-${n}`,`Patada al frente ${n}`,0.20,[ {id:`kick-${n}`,tipo:"tap",windowMs:110,peso:1.00} ])),
-        ...[1,2,3,4].map(n=>T(`caminata-releve-${n}`,`Caminata en relevé ${n}`,0.20,[ {id:`step-releve-${n}`,tipo:"swipe",durBeats:1,windowMs:120,peso:1.00,swipeDir:"right"} ])),
+        ...[1,2,3,4].map(n=>T(`patada-frente-${n}`,`Patada al frente ${n}`,0.20,[
+          {id:`kick-${n}`,tipo:"tap",windowMs:110,peso:1.00}
+        ])),
+        ...[1,2,3,4].map(n=>T(`caminata-releve-${n}`,`Caminata en relevé ${n}`,0.20,[
+          {id:`step-releve-${n}`,tipo:"slide",durBeats:1,windowMs:120,peso:1.00}
+        ])),
         T("salida-lateral","Salida lateral",0.30,[
           {id:"batida",tipo:"tap",windowMs:110,peso:0.40},
           {id:"caida",tipo:"tap",windowMs:110,peso:0.30},
           {id:"stick",tipo:"tap",windowMs:110,peso:0.30}
         ]),
-        T("stick-final","Stick",0.15,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00} ])
+        T("stick-final","Stick",0.15,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:120,peso:1.00}
+        ])
       ],
       bonos:[
         {tipo:"serie",desde:"patada-frente-1",hasta:"patada-frente-4",valor:0.20},
@@ -675,12 +748,16 @@ Integración:
           {id:"subida",tipo:"tap",windowMs:100,peso:0.40},
           {id:"equilibrio",tipo:"hold",durBeats:1,windowMs:115,peso:0.60}
         ]),
-        T("pasar-pierna","Pasar pierna sobre la viga",0.30,[ {id:"paso",tipo:"swipe",durBeats:1,windowMs:115,peso:1.00,swipeDir:"right"} ]),
+        T("pasar-pierna","Pasar pierna sobre la viga",0.30,[
+          {id:"paso",tipo:"slide",durBeats:1,windowMs:115,peso:1.00}
+        ]),
         T("sentar-straddle","Sentarse en straddle",0.25,[
           {id:"sentar",tipo:"tap",windowMs:100,peso:0.50},
           {id:"alinear",tipo:"hold",durBeats:1,windowMs:115,peso:0.50}
         ]),
-        T("impulso-piernas-atras","Impulsarse con piernar hacia atrás",0.25,[ {id:"impulso",tipo:"swipe",durBeats:1,windowMs:115,peso:1.00,swipeDir:"left"} ]),
+        T("impulso-piernas-atras","Impulsarse con piernar hacia atrás",0.25,[
+          {id:"impulso",tipo:"slide",durBeats:1,windowMs:115,peso:1.00}
+        ]),
         T("levantarse-tuck","Levantarse a tuck",0.30,[
           {id:"subida",tipo:"tap",windowMs:100,peso:0.40},
           {id:"estabilizar",tipo:"hold",durBeats:1,windowMs:115,peso:0.60}
@@ -695,9 +772,11 @@ Integración:
           {id:"hold",tipo:"hold",durBeats:5,windowMs:115,peso:0.60},
           {id:"fin",tipo:"tap",windowMs:100,peso:0.20}
         ]),
-        ...[1,2].map(n=>T(`patada-frente-${n}`,`Patada al frente ${n}`,0.25,[ {id:`kick-${n}`,tipo:"tap",windowMs:100,peso:1.00} ])),
+        ...[1,2].map(n=>T(`patada-frente-${n}`,`Patada al frente ${n}`,0.25,[
+          {id:`kick-${n}`,tipo:"tap",windowMs:100,peso:1.00}
+        ])),
         ...[1,2].map(n=>T(`fuette-${n}`,`Fuetté ${n}`,0.30,[
-          {id:`fuette-${n}-giro`,tipo:"swipe",durBeats:1,windowMs:115,peso:0.60,swipeDir:"right"},
+          {id:`fuette-${n}-giro`,tipo:"slide",durBeats:1,windowMs:115,peso:0.60},
           {id:`fuette-${n}-fin`,tipo:"tap",windowMs:100,peso:0.40}
         ])),
         T("salto-estirado","Salto estirado",0.30,[
@@ -705,13 +784,17 @@ Integración:
           {id:"aire",tipo:"hold",durBeats:1,windowMs:115,peso:0.35},
           {id:"caida",tipo:"tap",windowMs:100,peso:0.30}
         ]),
-        T("stick-1","Stick",0.20,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00} ]),
+        T("stick-1","Stick",0.20,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00}
+        ]),
         T("salida-lateral","Salida lateral",0.35,[
           {id:"batida",tipo:"tap",windowMs:100,peso:0.40},
           {id:"caida",tipo:"tap",windowMs:100,peso:0.30},
           {id:"stick",tipo:"tap",windowMs:100,peso:0.30}
         ]),
-        T("stick-2","Stick",0.20,[ {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00} ])
+        T("stick-2","Stick",0.20,[
+          {id:"congelar",tipo:"hold",durBeats:1,windowMs:115,peso:1.00}
+        ])
       ],
       bonos:[
         {tipo:"conexion",desde:"salto-estirado",hasta:"stick-1",valor:0.10},
@@ -720,16 +803,12 @@ Integración:
     }
   };
 
-  // ----------------------------------------------------
-  // Mapa maestro y API
-  // ----------------------------------------------------
-  const MAP = { Piso: PISO, Salto: SALTO, Barra: BARRA, Viga: VIGA };
-
+  const MAP = { Piso:PISO, Salto:SALTO, Barra:BARRA, Viga:VIGA };
   function get(nivel, evento="Piso"){
     const e = String(evento||"Piso").trim();
     const n = String(nivel||"Basico").trim();
     if (!MAP[e] || !MAP[e][n]) throw new Error(`Rutina no encontrada: ${n} / ${e}`);
-    return JSON.parse(JSON.stringify(MAP[e][n])); // clone
+    return JSON.parse(JSON.stringify(MAP[e][n]));
   }
 
   global.RFRoutines = { get, toSpawnMs, __version:"rf-v0.4" };
@@ -737,16 +816,16 @@ Integración:
 </script>
 
 <!-- =========================
-     Game runtime (v0.24.5.1)
+     Game runtime (v0.24.6)
      ========================= -->
 <script>
-/* ===== Routines Flow — v0.24.5.1 ===== */
+/* ===== Routines Flow — v0.24.6 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Versión */
-const GAME_VERSION='v0.24.5.1';
+const GAME_VERSION='v0.24.6';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
@@ -757,14 +836,16 @@ const LEVELS={baby:{label:'Baby Gym'}, basico:{label:'Básico'}, intermedio:{lab
 const LANES=4, HIT_Y=88, LINE_OFFSET=64, LINE_Y=HIT_Y+LINE_OFFSET, MISS_LINE_Y=HIT_Y-8, LANE_SPAN=560;
 const SWIPE_MIN_PX=50;
 
-/* Pace tuning por nivel (defaults) */
+/* Pace tuning por nivel (defaults reajustados) */
 const LV_TUNE_DEFAULT = {
-  baby:       { beatMult: 1.55, minGapMs: 900,  windowMult: 1.18, jitter: 0.12 },
-  basico:     { beatMult: 1.22, minGapMs: 700,  windowMult: 1.00, jitter: 0.10 },
+  baby:       { beatMult: 1.60, minGapMs: 1050, windowMult: 1.22, jitter: 0.10 },
+  basico:     { beatMult: 1.25, minGapMs: 850,  windowMult: 1.05, jitter: 0.10 },
   intermedio: { beatMult: 1.00, minGapMs: 560,  windowMult: 0.95, jitter: 0.08 },
 };
 /* Scoring (10.0) defaults QA */
 const SCORE_TUNE_DEFAULT = { goodFactor:0.80, bonusLogro:0.05, penaltyMissD:0.10 };
+/* Input defaults */
+const INPUT_DEFAULT = { mode: 'full', offsetMs: 0 };
 
 /* Persistencia QA */
 function getTuneAll(){ return LS.get('rf24:tune', LV_TUNE_DEFAULT); }
@@ -772,6 +853,8 @@ function setTuneAll(v){ LS.set('rf24:tune', v); }
 function getTune(lv){ const all=getTuneAll(); return all[lv] || LV_TUNE_DEFAULT[lv]; }
 function getScoreTune(){ return LS.get('rf24:scoreTune', SCORE_TUNE_DEFAULT); }
 function setScoreTune(v){ LS.set('rf24:scoreTune', v); }
+function getInputCfg(){ return LS.get('rf24:input', INPUT_DEFAULT); }
+function setInputCfg(v){ LS.set('rf24:input', v); }
 
 /* Preferencias */
 const prefersReduced = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -789,7 +872,7 @@ let lastLane=-1;
 
 /* Scoring /10 */
 let score10=0.0;
-let dMeta=[]; // por destreza: {id,name,maxD,sub:[{maxS,scored}], hasMiss, sumSub, lograda}
+let dMeta=[]; // por destreza
 let idToIdx={};
 let conexiones=[];
 
@@ -807,6 +890,7 @@ const nameInput=el('playerName'), apPills=el('apPills'), lvPills=el('lvPills');
 const lbTable=el('lbTable'), lbBody=lbTable?lbTable.querySelector('tbody'):null, resetLBBtn=el('resetLB');
 const helpBtn=el('helpBtn'), helpMask=el('helpMask'), helpClose=el('helpClose');
 const qaBtn=el('qaBtn'), qaMask=el('qaMask');
+const haloPerfect=el('haloPerfect'), haloGood=el('haloGood'), aimTip=el('aimTip');
 
 /* Audio + Haptics */
 const SFX=(()=>{let ctx=null,muted=LS.get('rf22:muted',false);
@@ -823,20 +907,31 @@ function haptic(kind){try{if(!navigator.vibrate)return;if(kind==='perfect')navig
 let laneEls=[], laneInput=[];
 function buildLanes(){
   lanesWrap.innerHTML=''; laneEls.length=0; laneInput.length=0;
+  const inputCfg=getInputCfg();
   for(let l=0;l<LANES;l++){
     const lane=document.createElement('div'); lane.className=`lane ${APP[apparatus].theme}`;
     const label=document.createElement('div'); label.className='note-label'; label.textContent='';
     const sub=document.createElement('div'); sub.className='sub-label'; sub.textContent='';
+    const guide=document.createElement('div'); guide.className='swipe-guide'; guide.textContent=''; // guía swipe
     const target=document.createElement('button'); target.className='target'; target.type='button'; target.style.bottom=(HIT_Y-18)+'px';
     target.innerHTML=`<b class="laneCount">0</b>`;
-    lane.appendChild(label); lane.appendChild(sub); lane.appendChild(target);
+    lane.appendChild(label); lane.appendChild(sub); lane.appendChild(guide); lane.appendChild(target);
     lanesWrap.appendChild(lane); laneEls.push(lane);
 
-    laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,swipeDir:'',multi:{count:0,need:0,expires:0},precue:false};
-    target.addEventListener('pointerdown',e=>onDown(l,e),{passive:false});
-    target.addEventListener('pointerup',e=>onUp(l,e),{passive:false});
-    target.addEventListener('pointercancel',e=>onCancel(l,e),{passive:true});
-    target.addEventListener('pointermove',e=>onMove(l,e),{passive:true});
+    laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,swipeDir:'',multi:{count:0,need:0,expires:0},precue:false,lastTapNoHit:0};
+
+    // Listeners — modo seleccionado
+    if(inputCfg.mode==='full'){
+      lane.addEventListener('pointerdown', e => { e.preventDefault(); onDown(l,e); }, {passive:false});
+      lane.addEventListener('pointerup',   e => { e.preventDefault(); onUp(l,e); },   {passive:false});
+      lane.addEventListener('pointercancel', e => onCancel(l,e), {passive:true});
+      lane.addEventListener('pointermove', e => onMove(l,e), {passive:true});
+    }else{
+      target.addEventListener('pointerdown',e=>{e.preventDefault();onDown(l,e)},{passive:false});
+      target.addEventListener('pointerup',e=>{e.preventDefault();onUp(l,e)},{passive:false});
+      target.addEventListener('pointercancel',e=>onCancel(l,e),{passive:true});
+      target.addEventListener('pointermove',e=>onMove(l,e),{passive:true});
+    }
   }
   hitline.style.bottom=(LINE_Y-3)+'px';
 }
@@ -865,8 +960,7 @@ function loadRoutine(){
     beatMs = Math.round(baseBeat * tune.beatMult);
 
     const Dsum = (routine.destrezas||[]).reduce((a,d)=>a+Math.max(0,Number(d.baseD||0)),0) || 1;
-    dMeta = [];
-    idToIdx = {};
+    dMeta = []; idToIdx={};
     (routine.destrezas||[]).forEach((d,i)=>{
       const maxD = 10 * (Math.max(0,Number(d.baseD||0)) / Dsum);
       const sub = (d.submovs||[]).map(s=>({peso:Math.max(0,Number(s.peso||0)), maxS:0, scored:false}));
@@ -877,6 +971,7 @@ function loadRoutine(){
     });
     conexiones = Array.isArray(routine.bonos)?routine.bonos.slice():[];
 
+    updateHalos(); // preparar halos con el primer submov
     return true;
   }catch(e){ console.warn('RFRoutines.get error',e); routine=null; beatMs=0; dMeta=[]; idToIdx={}; conexiones=[]; return false; }
 }
@@ -961,9 +1056,14 @@ function genNextNote(timeBase){
   laneEl.querySelector('.note-label').textContent = label;
   laneEl.querySelector('.sub-label').textContent  = nice(s.id);
 
+  // guía swipe (se activa cerca de la ventana)
+  const guide = laneEl.querySelector('.swipe-guide');
+  guide.textContent = (tipo==='swipe') ? swipeIcon(swipeDir) : '';
+  guide.style.opacity = '0';
+
   // prepara iteradores para la próxima
   const dIdx = currDestIndex, sIdx = currSubIndex;
-  currSubIndex++; if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
+  currSubIndex++; if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; updateHalos(); }
 
   const g = glyphFor(tipo, needCount, swipeDir);
   return [{
@@ -988,7 +1088,32 @@ function purgeNotesDOM(){ qsa('.note').forEach(x=>x.remove()); for(const n of no
 /* UI floats */
 let lineTimer=0; function resetLine(){hitline.className='hitline-global';}
 function flashLine(kind){ resetLine(); hitline.classList.add(kind==='perfect'?'hitline-perfect':kind==='good'?'hitline-good':'hitline-miss','hitline-flash'); clearTimeout(lineTimer); lineTimer=setTimeout(resetLine,300); }
-function floatText(lane,text,kind){ const ln=laneEls[lane]; const s=document.createElement('div'); s.className=`float ${kind}`; s.style.bottom=(LINE_Y+12)+'px'; s.textContent=text; ln.appendChild(s); setTimeout(()=>{ try{s.remove()}catch(_){}} , prefersReduced ? 1 : 650); }
+function floatText(lane,text,kind){ const ln=laneEls[lane]; const s=document.createElement('div'); s.className=`float ${kind}`; s.style.bottom=(LINE_Y+12)+'px'; s.textContent=text; ln.appendChild(s); setTimeout(()=>{ try{s.remove()}catch(_){}} , prefersReduced ? 1 : 800); }
+
+/* ===== Halos dinámicos ===== */
+let lastHaloKey='';
+function updateHalos(){
+  const s = currentSub();
+  const tune = getTune(level);
+  if(!s){ haloPerfect.style.display='none'; haloGood.style.display='none'; return; }
+  let windowMs = Math.max(60, Number(s.windowMs||120)); windowMs = Math.round(windowMs * tune.windowMult);
+  const pxPerMs = LANE_SPAN / fallMsNow();
+  const goodR   = Math.max(16, Math.min(72, windowMs * pxPerMs));
+  const perfectR = Math.max(10, Math.min(goodR, goodR * getPerfectFrac()));
+  const topGood = (LINE_Y - goodR) - 3, botGood = (LINE_Y + goodR) - 3;
+  const topPerf = (LINE_Y - perfectR) - 3, botPerf = (LINE_Y + perfectR) - 3;
+
+  haloPerfect.style.bottom = `${topPerf}px`;
+  haloPerfect.style.top    = `calc(${botPerf}px - 6px)`;
+  haloGood.style.bottom    = `${topGood}px`;
+  haloGood.style.top       = `calc(${botGood}px - 6px)`;
+
+  haloPerfect.style.display='block';
+  haloGood.style.display='block';
+
+  const key=`${perfectR.toFixed(2)}|${goodR.toFixed(2)}`;
+  lastHaloKey=key;
+}
 
 /* HUD + progreso */
 function updateHUD(){scoreEl.textContent=Number(score10).toFixed(2);}
@@ -1001,7 +1126,6 @@ function addSubScore(dIdx, sIdx, rank){
   const sm = dm.sub[sIdx]; if(!sm || sm.scored) return 0;
   const delta = (sm.maxS||0) * gm;
   sm.scored=true; dm.sumSub += delta;
-  // ¿ya está lograda? (todas scored y sin miss)
   const allScored = dm.sub.every(x=>x.scored);
   if(allScored) dm.lograda = !dm.hasMiss;
   score10 += delta;
@@ -1010,7 +1134,7 @@ function addSubScore(dIdx, sIdx, rank){
 function markMiss(dIdx, sIdx){
   const dm = dMeta[dIdx]; if(!dm) return;
   const sm = dm.sub[sIdx]; if(!sm || sm.scored) return;
-  sm.scored=true; dm.hasMiss=true; // suma 0
+  sm.scored=true; dm.hasMiss=true;
   const allScored = dm.sub.every(x=>x.scored);
   if(allScored) dm.lograda = !dm.hasMiss;
 }
@@ -1050,13 +1174,19 @@ function startGame(){
   const firstSub = currentSub() || {durBeats:1};
   nextSpawnAt = nextSpawnIntervalFor(firstSub);
 
-  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; }
+  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; lane.querySelector('.swipe-guide').style.opacity='0';}
   updateProgressBar(); updateLaneCounters(); updateHUD();
   startTs=null; timeline=0; progBar.style.width='0%';
   results.style.display='none'; results.classList.remove('locked');
   [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
   panel.style.display='none';
-  resetLine(); requestAnimationFrame(loop);
+  resetLine(); updateHalos();
+
+  // Tip “Apunta a la línea” al iniciar; se oculta al primer Perfect o a los 10s
+  aimTip.classList.add('on');
+  setTimeout(()=>aimTip.classList.remove('on'), 10000);
+
+  requestAnimationFrame(loop);
 }
 
 /* Fin de juego: sumar bonus/penalty por destreza + bonos conexión */
@@ -1101,7 +1231,7 @@ function endGame(){
   rDLogradas.textContent=`${logradasCount}/${dMeta.length}`;
   medalEl.textContent=`${emoji} ${medal[0].toUpperCase()+medal.slice(1)}`;
 
-  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; }
+  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; lane.querySelector('.swipe-guide').style.opacity='0';}
 
   results.style.display='flex';
   results.classList.add('locked');
@@ -1116,18 +1246,18 @@ function endGame(){
   saveLeaderboard(medal,emoji,finalScore); renderLeaderboard(); saveLastRun(finalScore);
 }
 
-/* Render + precue + hold HUD */
+/* Render + precue + hold HUD + guía swipe */
 function updateNotes(){
   const now=timeline; const keep=[];
+  const pxPerMs = LANE_SPAN / fallMsNow();
   for(const n of notes){
     const y = noteY(n, now);
 
-    // Pre-cue
+    // Pre-cue (blink) y guía swipe
     if(!n.precueShown){
       const {goodR}=windowToRadiusPx(n);
       const dist = (y - (LINE_Y + goodR));
       if(dist>0){
-        const pxPerMs = LANE_SPAN / fallMsNow();
         const msToGood = dist / pxPerMs;
         if(msToGood<=220){
           const sl = laneEls[n.lane].querySelector('.sub-label');
@@ -1135,6 +1265,14 @@ function updateNotes(){
           n.precueShown=true;
         }
       }
+    }
+    // Guía swipe cuando está cerca de entrar
+    if(n.tipo==='swipe'){
+      const distToLine = Math.abs(y - LINE_Y);
+      const ms = distToLine / pxPerMs;
+      const guide = laneEls[n.lane].querySelector('.swipe-guide');
+      if(ms<=400){ guide.textContent = swipeIcon(n.swipeDir); guide.style.opacity='0.9'; }
+      else { guide.style.opacity='0'; }
     }
 
     if(n.inProgress && n.tipo==='hold' && n.el){
@@ -1160,22 +1298,31 @@ function onDown(l,e){
   if(!running || paused || ended) return;
   e.preventDefault();
   laneEls[l].querySelector('.target')?.classList.add('bounce');
-  const st=laneInput[l]; st.down=true; st.downX=e.clientX||0; st.downY=e.clientY||0; st.downT=timeline; st.swipe=false; st.swipeDir='';
+  const st=laneInput[l];
+  const now=timeline;
+
+  // anti-mash: si hace menos de 100 ms y no había candidato, ignora
+  const cand0 = pickCand(l);
+  if(!cand0 && (now - st.lastTapNoHit) < 100) return;
+  st.down=true; st.downX=e.clientX||0; st.downY=e.clientY||0; st.downT=now; st.swipe=false; st.swipeDir='';
 
   const note = pickCand(l);
-  if(!note) return;
+  if(!note){ st.lastTapNoHit = now; return; }
+
+  // tip “apunta” se oculta al primer Perfect
+  if(aimTip.classList.contains('on')) aimTip.classList.remove('on');
 
   if(note.tipo==='hold'){
-    const ok = tryJudgeWindow(note);
-    if(!ok) return;
+    const ok = tryJudgeWindow(note,true);
+    if(!ok) { st.lastTapNoHit = now; return; }
     note.inProgress=true; st.holding=note;
-    note.hold.start = timeline;
+    note.hold.start = adjustedNow();
     note.hold.durMs = Math.max(1, note.need) * beatMs;
   }else if(note.tipo==='tap'){
     finalizeHit(note, 'tap');
   }else if(note.tipo==='multi'){
-    const ok = tryJudgeWindow(note); if(!ok) return;
-    if(note.multi.count===0){ note.multi.deadline = timeline + (Math.max(1,note.need) * beatMs); }
+    const ok = tryJudgeWindow(note,true); if(!ok){ st.lastTapNoHit = now; return; }
+    if(note.multi.count===0){ note.multi.deadline = adjustedNow() + (Math.max(1,note.need) * beatMs); }
     note.multi.count++;
     if(note.el && note.tipo==='multi'){ const meta=note.el.querySelector('.meta'); if(meta){ meta.textContent = 'x'+Math.max(0, note.need - note.multi.count + 1); } }
     if(note.multi.count >= (note.need||2)){ finalizeHit(note, 'multi'); }
@@ -1195,24 +1342,28 @@ function onUp(l,_e){
   if(!running || paused || ended || !st.down){ st.down=false; return; }
   st.down=false;
 
-  const note = pickCand(l);
   if(st.holding){
     const n=st.holding;
-    const held = timeline - n.hold.start;
+    const held = adjustedNow() - n.hold.start;
     if(held + 60 >= n.hold.durMs){ finalizeHit(n, 'hold'); }
     else { registerMiss(n); }
     laneInput[l].holding=null; return;
   }
+
+  const note = pickCand(l);
   if(note && note.tipo==='swipe' && st.swipe){
-    const ok = tryJudgeWindow(note) && swipeMatches(note, st.swipeDir);
+    const ok = tryJudgeWindow(note,true) && swipeMatches(note, st.swipeDir);
     if(ok) finalizeHit(note,'swipe'); else registerMiss(note);
+  }else if(note && note.tipo==='tap'){
+    if(tryJudgeWindow(note,true)) finalizeHit(note,'tap'); else registerMiss(note);
   }
 }
 function onCancel(l,_e){ const st=laneInput[l]; st.down=false; if(st.holding){ registerMiss(st.holding); st.holding=null; } }
 
+function adjustedNow(){ const input=getInputCfg(); return timeline + (input.offsetMs||0); }
 function swipeMatches(note, dir){ if(!note || note.tipo!=='swipe') return false; const need=(note.swipeDir||'').toLowerCase(); if(!need) return true; return dir===need; }
 function pickCand(lane){
-  const now=timeline;
+  const now=adjustedNow();
   return notes.filter(n=>n.lane===lane && !n.hit).map(n=>({n,y:noteY(n,now)})).sort((a,b)=>Math.abs(a.y-LINE_Y)-Math.abs(b.y-LINE_Y))[0]?.n || null;
 }
 function windowToRadiusPx(note){
@@ -1221,13 +1372,18 @@ function windowToRadiusPx(note){
   const goodR   = Math.max(16, Math.min(72, maxR));
   const perfectFrac = getPerfectFrac();
   const perfectR = Math.max(10, Math.min(goodR, goodR*perfectFrac));
-  return {perfectR, goodR};
+  return {perfectR, goodR, pxPerMs};
 }
-function tryJudgeWindow(note){ const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y); const {goodR}=windowToRadiusPx(note); return dy<=goodR; }
+function tryJudgeWindow(note, useAdjusted=false){
+  const now = useAdjusted ? adjustedNow() : timeline;
+  const y=noteY(note,now), dy=Math.abs(y-LINE_Y);
+  const {goodR}=windowToRadiusPx(note); return dy<=goodR;
+}
 
 function finalizeHit(note, _kind){
-  const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
-  const {perfectR}=windowToRadiusPx(note);
+  const now = adjustedNow();
+  const y=noteY(note,now), dy=Math.abs(y-LINE_Y);
+  const {perfectR, pxPerMs}=windowToRadiusPx(note);
   const rank = (dy<=perfectR)?'perfect':'good';
 
   note.hit=true; processed++;
@@ -1237,7 +1393,14 @@ function finalizeHit(note, _kind){
   if(rank==='perfect'){hits.perfect++;SFX.perfect();haptic('perfect');}
   else{hits.good++;SFX.good();haptic('good');}
   laneHits[note.lane]++; updateLaneCounters(note.lane); flashLine(rank);
-  floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta.toFixed(2)}`, rank);
+
+  // Early/Late ms
+  const signedDy = y - LINE_Y; // >0 = EARLY (aún por encima), <0 = LATE
+  const errMs = Math.round(signedDy / pxPerMs);
+  const timing = signedDy>0 ? `EARLY ${Math.abs(errMs)}ms` : signedDy<0 ? `LATE ${Math.abs(errMs)}ms` : 'ON TIME';
+  floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} · ${timing} · +${delta.toFixed(2)}`, rank);
+  if(rank==='perfect' && aimTip.classList.contains('on')) aimTip.classList.remove('on');
+
   updateHUD(); updateProgressBar();
 
   const hasFuture = notes.some(x=>!x.hit && x.lane===note.lane && x.el);
@@ -1245,6 +1408,7 @@ function finalizeHit(note, _kind){
     const lane = laneEls[note.lane];
     lane.querySelector('.note-label').textContent='';
     lane.querySelector('.sub-label').textContent='';
+    lane.querySelector('.swipe-guide').style.opacity='0';
   }
 }
 function registerMiss(note){
@@ -1253,6 +1417,9 @@ function registerMiss(note){
   hits.miss++; flashLine('miss'); floatText(note.lane,'Miss','miss'); SFX.miss(); haptic('miss');
   markMiss(note.dIdx, note.sIdx);
   updateHUD(); updateProgressBar();
+
+  const lane = laneEls[note.lane];
+  lane.querySelector('.swipe-guide').style.opacity='0';
 }
 
 /* Persistencia */
@@ -1278,7 +1445,7 @@ helpMask.addEventListener('pointerdown',e=>{ if(e.target===helpMask) helpMask.st
 
 qaBtn.onclick=()=>openQA();
 el('qaClose').onclick=()=>qaMask.style.display='none';
-el('qaReset').onclick=()=>{ setTuneAll({...LV_TUNE_DEFAULT}); setScoreTune({...SCORE_TUNE_DEFAULT}); fillQA(); saveQA(); };
+el('qaReset').onclick=()=>{ setTuneAll({...LV_TUNE_DEFAULT}); setScoreTune({...SCORE_TUNE_DEFAULT}); setInputCfg({...INPUT_DEFAULT}); fillQA(); saveQA(); buildLanes(); };
 el('qaApply').onclick=()=>{ saveQA(); qaMask.style.display='none'; alert('Guardado. Inicia una partida para aplicar los cambios.'); };
 
 muteBtn.onclick=()=>SFX.setMuted(!SFX.isMuted());
@@ -1291,7 +1458,7 @@ apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if
 lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); buildLanes(); refreshBadges(); renderLeaderboard();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
-/* Teclado básico */
+/* Teclado básico (opcional para desktop QA) */
 const KB={hold:false, swipe:false, swipeDir:'', lastLane:0};
 addEventListener('keydown',(e)=>{
   if(!running || paused || ended) return;
@@ -1303,7 +1470,7 @@ addEventListener('keydown',(e)=>{
   if(key in map){
     const lane=map[key]; KB.lastLane=lane; e.preventDefault();
     if(KB.hold){ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); }
-    else if(KB.swipe){ const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){ const dir = KB.swipeDir || 'up'; if( tryJudgeWindow(cand) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } else { registerMiss(cand); } } }
+    else if(KB.swipe){ const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){ const dir = KB.swipeDir || 'up'; if( tryJudgeWindow(cand,true) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } else { registerMiss(cand); } } }
     else{ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
   }
 },{passive:false});
@@ -1315,13 +1482,20 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden && running
 /* ===== Tuning (QA) ===== */
 function openQA(){ fillQA(); qaMask.style.display='flex'; }
 function fillQA(){
-  const t=getTuneAll(), s=getScoreTune();
+  const t=getTuneAll(), s=getScoreTune(), i=getInputCfg();
+  // Entrada
+  el('qa_inputMode').value=i.mode||'full';
+  el('qa_offset').value=i.offsetMs||0; el('qa_offset_val').textContent=String(i.offsetMs||0);
+  el('qa_offset').oninput=(e)=>{ el('qa_offset_val').textContent=e.target.value; };
+
+  // Ritmo
   for(const lv of ['baby','basico','intermedio']){
     for(const k of ['beatMult','minGapMs','windowMult','jitter']){
       const id=`qa_${lv}_${k}`, lab=`${id}_val`; const elR=el(id), elL=el(lab);
       elR.value = t[lv][k]; elL.textContent = String(t[lv][k]); elR.oninput = (e)=>{ elL.textContent=e.target.value; };
     }
   }
+  // Score
   el('qa_score_good').value=s.goodFactor; el('qa_score_good_val').textContent=String(s.goodFactor);
   el('qa_score_bonus').value=s.bonusLogro; el('qa_score_bonus_val').textContent=String(s.bonusLogro);
   el('qa_score_penalty').value=s.penaltyMissD; el('qa_score_penalty_val').textContent=String(s.penaltyMissD);
@@ -1338,6 +1512,9 @@ function saveQA(){
   setTuneAll(t);
   const s={goodFactor:parseFloat(el('qa_score_good').value), bonusLogro:parseFloat(el('qa_score_bonus').value), penaltyMissD:parseFloat(el('qa_score_penalty').value)};
   setScoreTune(s);
+  const i={mode:el('qa_inputMode').value, offsetMs:parseInt(el('qa_offset').value,10)};
+  setInputCfg(i);
+  buildLanes();
 }
 
 /* Inicial */
