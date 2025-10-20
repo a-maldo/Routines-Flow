@@ -1,17 +1,17 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.1
+Versión: v0.24.4
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-19
 
-Cambios clave v0.24.1:
-- 🖐️ Iconos de acción por nota (tap/hold/swipe/multi xN).
-- ⏳ Hold visual: barra de progreso integrada en la nota.
-- 🏷️ Submovimientos visibles bajo la etiqueta de destreza.
-- 🔎 Etiquetas de destrezas más visibles (tamaño, borde por aparato, sombra).
+Cambios clave v0.24.4:
+- Ritmo escalado por nivel (beatMult) + minGapMs + windowMult + jitter.
+- Separación mínima entre spawns y anti-repetición inmediata de carril.
+- Perfect dinámico por nivel (Baby más amable).
+- Panel "Tuning (QA)" con sliders y persistencia.
 ========================================
 -->
 
@@ -24,7 +24,7 @@ Cambios clave v0.24.1:
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.24.1)</title>
+<title>Routines Flow — TGC (v0.24.4)</title>
 
 <style>
   :root{
@@ -57,25 +57,26 @@ Cambios clave v0.24.1:
   .note-label{
     position:absolute;top:6px;left:50%;transform:translateX(-50%);
     padding:6px 10px;border-radius:14px;font-weight:900;font-size:13px;color:#0b1220;
-    background:#fff;border:2px solid transparent; /* color se aplica por aparato */
+    background:#fff;border:2px solid transparent;
     box-shadow:0 6px 16px rgba(0,0,0,.12);
     white-space:nowrap;user-select:none;pointer-events:none;z-index:8;
   }
-  /* Borde por aparato (más visible) */
   .lane.piso  .note-label{border-color:var(--accent)}
   .lane.viga  .note-label{border-color:var(--accent-alt)}
   .lane.salto .note-label{border-color:var(--accent-salto)}
   .lane.barra .note-label{border-color:var(--accent-barra)}
 
-  /* Submovimiento visible */
+  /* Submovimiento visible + pre-cue */
   .sub-label{
     position:absolute;top:36px;left:50%;transform:translateX(-50%);
     padding:3px 8px;border-radius:999px;font-weight:800;font-size:11px;
     color:#334155;background:rgba(148,163,184,.18);border:1px solid #e5e7eb;
     white-space:nowrap;user-select:none;pointer-events:none;z-index:7;
   }
+  @keyframes precueBlink{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
+  .sub-label.precue{animation:precueBlink .6s ease 1}
 
-  /* Nota vacía descendente con icono y HUD interno */
+  /* Nota con icono/acción y HUD hold */
   .note{
     position:absolute;left:50%;transform:translateX(-50%);
     border-radius:16px;color:#fff;font-weight:800;font-size:13px;
@@ -112,7 +113,6 @@ Cambios clave v0.24.1:
   .pill{padding:8px 12px;border-radius:999px;background:#e6e9f2;color:#111827;font-weight:700;font-size:12px;border:1px solid #e5e7eb;cursor:pointer}
   .pill.on{background:#0f172a;color:#fff;border-color:#0f172a}
   .field{display:flex;flex-direction:column;gap:6px}
-
   .input{padding:12px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;font-weight:700;color:var(--ink);caret-color:var(--ink);color-scheme: light;}
   .input::placeholder{ color:#6b7280; opacity:.9 }
   .input:-webkit-autofill{-webkit-text-fill-color: var(--ink) !important; transition: background-color 5000s ease-in-out 0s;}
@@ -121,6 +121,9 @@ Cambios clave v0.24.1:
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;border:1px solid #0f172a;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.18)}
   .btn.alt{background:#f3f6fb;color:#0f172a;border-color:#e5e7eb}
   .btn:disabled{opacity:.55;cursor:default;filter:saturate(.6)}
+
+  /* HUD combo */
+  .comboHud{background:#0f172a;color:#fff;border-radius:999px;padding:4px 8px;font-weight:900;font-size:12px;margin-left:6px}
 
   .leaderboard{margin-top:10px;border:1px solid #eef2f7;border-radius:14px;background:#fff;overflow:hidden}
   .leaderboard h4{margin:0;padding:10px 12px;font-size:13px;background:#f8fafc;border-bottom:1px solid #eef2f7}
@@ -149,14 +152,27 @@ Cambios clave v0.24.1:
   .pausedMask .box{background:rgba(15,23,42,.9);padding:16px 20px;border-radius:14px;font-weight:900;display:flex;flex-direction:column;gap:10px;align-items:center}
   .pausedMask .box button{border:1px solid #fff;background:#10b981;color:#fff;border-radius:12px;padding:10px 14px;font-weight:900;cursor:pointer}
 
-  @media (prefers-reduced-motion: reduce){
-    .target.bounce{ animation:none !important; }
-    .float{ animation:none !important; opacity:1; }
-    .hitline-flash{ animation:none !important; }
-    *{scroll-behavior:auto;}
-  }
-  @supports(height: 100dvh){ .game{ height:calc(100dvh - 16px); } }
-  @media (max-width:380px){.title{font-size:13px}.chip{font-size:11px;padding:3px 8px}.target b{font-size:18px}}
+  /* Overlay ayuda */
+  .helpMask{position:absolute;inset:0;background:rgba(15,23,42,.55);color:#fff;display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(1.5px)}
+  .helpBox{background:#0f172a;border:1px solid #334155;border-radius:16px;padding:16px;max-width:520px;margin:12px}
+  .helpBox h3{margin:0 0 8px 0}
+  .helpList{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .helpItem{display:flex;align-items:center;gap:10px;background:#111827;border:1px solid #1f2937;border-radius:12px;padding:10px}
+  .helpKbd{font-weight:900;border:1px solid #334155;padding:2px 6px;border-radius:6px;background:#0b1220}
+  .helpClose{margin-top:10px;background:#10b981;border:1px solid #10b981;border-radius:12px;color:#052e1f;font-weight:900;padding:10px;cursor:pointer}
+
+  /* Panel Tuning (QA) */
+  .qaMask{position:absolute;inset:0;background:rgba(15,23,42,.35);color:#fff;display:none;align-items:flex-end;justify-content:center;z-index:45}
+  .qaPanel{width:100%;max-width:560px;background:#fff;color:#0b1220;border-radius:16px 16px 0 0;border:1px solid #e5e7eb;box-shadow:0 -12px 24px rgba(0,0,0,.12);padding:12px 14px}
+  .qaPanel h3{margin:4px 0 10px 0;font-size:16px}
+  .qaGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .qaCard{border:1px solid #e5e7eb;border-radius:12px;padding:10px}
+  .qaRow{display:grid;grid-template-columns:1fr 92px;gap:8px;align-items:center;margin:6px 0}
+  .qaRow input[type="range"]{width:100%}
+  .qaSub{font-size:12px;color:#475569}
+  .qaActions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+  .qaBtn{background:#0f172a;color:#fff;border:1px solid #0f172a;border-radius:10px;padding:10px 12px;font-weight:900;cursor:pointer}
+  .qaBtn.alt{background:#f3f6fb;color:#0f172a;border-color:#e5e7eb}
 </style>
 </head>
 <body>
@@ -165,10 +181,13 @@ Cambios clave v0.24.1:
     <div class="title">
       ⭐ Routines Flow — <span id="apparatusLabel">Salto</span>
       <span class="chip" id="verBadge"></span>
+      <span class="comboHud" id="comboHud" style="display:none">x1.0</span>
     </div>
     <div class="hud">
       <span class="chip" id="levelBadge">BABY GYM</span>
       <span class="chip">Puntaje: <b id="score">0</b></span>
+      <button class="btn-icon" id="helpBtn" title="¿Cómo jugar?" type="button">❔</button>
+      <button class="btn-icon" id="qaBtn" title="Tuning (QA)" type="button">QA⚙️</button>
       <button class="btn-icon" id="muteBtn" title="Sonido" type="button" aria-label="Silenciar o activar sonido" aria-pressed="false"><span id="muteIcon">🔊</span></button>
       <button class="btn-icon" id="pauseBtn" title="Pausar" type="button">⏸</button>
       <button class="btn-icon" id="restartBtn" title="Reiniciar" type="button">🔁</button>
@@ -246,25 +265,140 @@ Cambios clave v0.24.1:
     </div>
   </div>
 
+  <!-- Overlay ayuda (¿Cómo jugar?) -->
+  <div class="helpMask" id="helpMask">
+    <div class="helpBox">
+      <h3>¿Cómo jugar?</h3>
+      <div class="helpList">
+        <div class="helpItem"><span class="helpKbd">👆 Tap</span><span>Toca cuando la nota pasa por la línea.</span></div>
+        <div class="helpItem"><span class="helpKbd">⏱ Hold</span><span>Mantén hasta vaciar la barra.</span></div>
+        <div class="helpItem"><span class="helpKbd">⇧/⇩/⇦/⇨ Swipe</span><span>Desliza en la dirección pedida.</span></div>
+        <div class="helpItem"><span class="helpKbd">✚ xN Multi</span><span>Da N toques dentro de la ventana.</span></div>
+        <div class="helpItem"><span class="helpKbd">1–4</span><span>Selecciona carril y hace <b>tap</b>.</span></div>
+        <div class="helpItem"><span class="helpKbd">H + (1–4)</span><span>Inicia <b>hold</b> (suelta H para terminar).</span></div>
+        <div class="helpItem"><span class="helpKbd">S + ↑/↓/←/→ + (1–4)</span><span>Hace <b>swipe</b> direccional en el carril.</span></div>
+        <div class="helpItem"><span class="helpKbd">M + (1–4)</span><span>Añade un toque a <b>multi</b>.</span></div>
+      </div>
+      <button class="helpClose" id="helpClose">Entendido</button>
+    </div>
+  </div>
+
+  <!-- Panel Tuning (QA) -->
+  <div class="qaMask" id="qaMask" aria-hidden="true">
+    <div class="qaPanel" role="dialog" aria-modal="true" aria-label="Tuning QA">
+      <h3>⚙️ Tuning (QA) · Ritmo y Ventanas</h3>
+      <div class="qaGrid">
+        <!-- Baby -->
+        <div class="qaCard">
+          <div><b>Baby</b> <span class="qaSub">Aprendizaje suave</span></div>
+          <div class="qaRow">
+            <label>beatMult</label>
+            <input type="range" min="0.8" max="2.0" step="0.01" id="qa_baby_beatMult"><span id="qa_baby_beatMult_val">1.55</span>
+          </div>
+          <div class="qaRow">
+            <label>minGapMs</label>
+            <input type="range" min="400" max="1500" step="10" id="qa_baby_minGapMs"><span id="qa_baby_minGapMs_val">900</span>
+          </div>
+          <div class="qaRow">
+            <label>windowMult</label>
+            <input type="range" min="0.8" max="1.5" step="0.01" id="qa_baby_windowMult"><span id="qa_baby_windowMult_val">1.18</span>
+          </div>
+          <div class="qaRow">
+            <label>jitter</label>
+            <input type="range" min="0.00" max="0.30" step="0.01" id="qa_baby_jitter"><span id="qa_baby_jitter_val">0.12</span>
+          </div>
+        </div>
+        <!-- Basico -->
+        <div class="qaCard">
+          <div><b>Básico</b> <span class="qaSub">Flujo moderado</span></div>
+          <div class="qaRow">
+            <label>beatMult</label>
+            <input type="range" min="0.8" max="2.0" step="0.01" id="qa_basico_beatMult"><span id="qa_basico_beatMult_val">1.22</span>
+          </div>
+          <div class="qaRow">
+            <label>minGapMs</label>
+            <input type="range" min="400" max="1200" step="10" id="qa_basico_minGapMs"><span id="qa_basico_minGapMs_val">700</span>
+          </div>
+          <div class="qaRow">
+            <label>windowMult</label>
+            <input type="range" min="0.8" max="1.5" step="0.01" id="qa_basico_windowMult"><span id="qa_basico_windowMult_val">1.00</span>
+          </div>
+          <div class="qaRow">
+            <label>jitter</label>
+            <input type="range" min="0.00" max="0.30" step="0.01" id="qa_basico_jitter"><span id="qa_basico_jitter_val">0.10</span>
+          </div>
+        </div>
+        <!-- Intermedio -->
+        <div class="qaCard">
+          <div><b>Intermedio</b> <span class="qaSub">Cercano a ritmo real</span></div>
+          <div class="qaRow">
+            <label>beatMult</label>
+            <input type="range" min="0.8" max="2.0" step="0.01" id="qa_intermedio_beatMult"><span id="qa_intermedio_beatMult_val">1.00</span>
+          </div>
+          <div class="qaRow">
+            <label>minGapMs</label>
+            <input type="range" min="400" max="1000" step="10" id="qa_intermedio_minGapMs"><span id="qa_intermedio_minGapMs_val">560</span>
+          </div>
+          <div class="qaRow">
+            <label>windowMult</label>
+            <input type="range" min="0.8" max="1.5" step="0.01" id="qa_intermedio_windowMult"><span id="qa_intermedio_windowMult_val">0.95</span>
+          </div>
+          <div class="qaRow">
+            <label>jitter</label>
+            <input type="range" min="0.00" max="0.30" step="0.01" id="qa_intermedio_jitter"><span id="qa_intermedio_jitter_val">0.08</span>
+          </div>
+        </div>
+        <!-- Info -->
+        <div class="qaCard">
+          <div><b>Notas</b></div>
+          <div class="qaSub">• <b>beatMult</b>: multiplica el beat del GD (más alto = más lento).<br/>
+          • <b>minGapMs</b>: separación mínima entre notas.<br/>
+          • <b>windowMult</b>: amplía/reduce ventana de acierto.<br/>
+          • <b>jitter</b>: variación aleatoria (0=metrónomo, 0.1 recomendado).</div>
+        </div>
+      </div>
+      <div class="qaActions">
+        <button class="qaBtn alt" id="qaClose">Cerrar</button>
+        <button class="qaBtn alt" id="qaReset">Reset por defecto</button>
+        <button class="qaBtn" id="qaApply">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="progress"><div id="progBar"></div></div>
 </div>
 
-<!-- ==== RFRoutines v0.4 (reutiliza la que ya integramos en v0.24.0) ==== -->
+<!-- ==== RFRoutines v0.4 fallback (demo autónoma si no está disponible) ==== -->
 <script>
-/* Minimal proxy para mantener compatibilidad si ya existe en el entorno */
 if(!window.RFRoutines || !window.RFRoutines.get){
-  window.RFRoutines = { get:()=>({nivel:"Basico",evento:"Piso",bpm:96,destrezas:[{nombre:"Rodada",submovs:[{id:"tap-in",tipo:"tap",windowMs:120,peso:.3},{id:"roll",tipo:"swipe",durBeats:1,windowMs:150,peso:.4},{id:"tap-out",tipo:"tap",windowMs:120,peso:.3}]}]}), toSpawnMs:(bpm)=>Math.round(60000/Math.max(40,Math.min(220,bpm))) };
+  window.RFRoutines = {
+    get:()=>({
+      nivel:"Basico",evento:"Piso",bpm:96,
+      destrezas:[
+        {nombre:"Rodada",submovs:[
+          {id:"tap-in",tipo:"tap",windowMs:120,peso:.3},
+          {id:"roll",tipo:"swipe",durBeats:1,windowMs:150,peso:.4,swipeDir:"up"},
+          {id:"tap-out",tipo:"tap",windowMs:120,peso:.3}
+        ]},
+        {nombre:"Salto estirado",submovs:[
+          {id:"batida",tipo:"tap",windowMs:110,peso:.3},
+          {id:"aire",tipo:"hold",durBeats:1,windowMs:140,peso:.4},
+          {id:"stick",tipo:"tap",windowMs:110,peso:.3}
+        ]}
+      ]}),
+    toSpawnMs:(bpm)=>Math.round(60000/Math.max(40,Math.min(220,bpm)))
+  };
 }
 </script>
 
 <script>
-/* ===== Routines Flow — v0.24.1 (iconos, hold-visual, sublabels) ===== */
+/* ===== Routines Flow — v0.24.4 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-/* Constantes UI */
-const GAME_VERSION='v0.24.1';
+/* Versión */
+const GAME_VERSION='v0.24.4';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
@@ -273,8 +407,18 @@ const LEVELS={baby:{label:'Baby Gym'}, basico:{label:'Básico'}, intermedio:{lab
 
 /* Geometría y juicio */
 const LANES=4, HIT_Y=88, LINE_OFFSET=64, LINE_Y=HIT_Y+LINE_OFFSET, MISS_LINE_Y=HIT_Y-8, LANE_SPAN=560;
-const PERFECT_FRAC=0.45; // 45% de la ventana temporal → perfecto
 const SWIPE_MIN_PX=50;
+
+/* Pace tuning por nivel (defaults) */
+const LV_TUNE_DEFAULT = {
+  baby:       { beatMult: 1.55, minGapMs: 900,  windowMult: 1.18, jitter: 0.12 },
+  basico:     { beatMult: 1.22, minGapMs: 700,  windowMult: 1.00, jitter: 0.10 },
+  intermedio: { beatMult: 1.00, minGapMs: 560,  windowMult: 0.95, jitter: 0.08 },
+};
+/* Carga/guarda QA */
+function getTuneAll(){ return LS.get('rf24:tune', LV_TUNE_DEFAULT); }
+function setTuneAll(v){ LS.set('rf24:tune', v); }
+function getTune(lv){ const all=getTuneAll(); return all[lv] || LV_TUNE_DEFAULT[lv]; }
 
 /* Preferencias del sistema */
 const prefersReduced = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -289,6 +433,12 @@ let totalTarget=0, spawned=0, processed=0, nextSpawnAt=1400;
 let routine=null, beatMs=0;
 let currDestIndex=0, currSubIndex=0;
 
+/* Pacing state extra */
+let lastLane=-1;
+
+/* Combo / multiplicador */
+let combo=0, mult=1.0;
+
 /* Anti taps final */
 const END_GRACE_MS = 450;
 let resultsUnlockTimer = 0;
@@ -301,8 +451,10 @@ const startBtn=el('startBtn'), restartBtn=el('restartBtn'), pauseBtn=el('pauseBt
 const playAgain=el('playAgain'), nextEvent=el('nextEvent'), toMain=el('toMain'), continueLastBtn=el('continueLast');
 const nameInput=el('playerName'), apPills=el('apPills'), lvPills=el('lvPills');
 const lbTable=el('lbTable'), lbBody=lbTable?lbTable.querySelector('tbody'):null, resetLBBtn=el('resetLB');
+const helpBtn=el('helpBtn'), helpMask=el('helpMask'), helpClose=el('helpClose');
+const qaBtn=el('qaBtn'), qaMask=el('qaMask');
 
-/* Audio */
+/* Audio + Haptics */
 const SFX=(()=>{let ctx=null,muted=LS.get('rf22:muted',false);
   const ensure=()=>{if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();return ctx};
   const tone=(f=880,d=.06,type='sine',vol=.22)=>{if(muted)return;const c=ensure(),o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=f;o.connect(g);g.connect(c.destination);const t=c.currentTime;g.gain.setValueAtTime(.001,t);g.gain.exponentialRampToValueAtTime(vol,t+.01);g.gain.exponentialRampToValueAtTime(.001,t+d);o.start();o.stop(t+d)};
@@ -311,7 +463,14 @@ const SFX=(()=>{let ctx=null,muted=LS.get('rf22:muted',false);
 })();
 addEventListener('pointerdown',()=>SFX.resume(),{once:true});
 muteIcon.textContent=SFX.isMuted()?'🔇':'🔊'; muteBtn.setAttribute('aria-pressed',String(SFX.isMuted()));
-function buzz(ms){try{if(navigator.vibrate) navigator.vibrate(ms);}catch(_){}}  
+function haptic(kind){
+  try{
+    if(!navigator.vibrate) return;
+    if(kind==='perfect') navigator.vibrate(12);
+    else if(kind==='good') navigator.vibrate(8);
+    else if(kind==='miss') navigator.vibrate([30,40,30]);
+  }catch(_){}
+}
 
 /* Carriles + input por gestos */
 let laneEls=[], laneInput=[];
@@ -326,7 +485,7 @@ function buildLanes(){
     lane.appendChild(label); lane.appendChild(sub); lane.appendChild(target);
     lanesWrap.appendChild(lane); laneEls.push(lane);
 
-    laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,multi:{count:0,need:0,expires:0}};
+    laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,swipeDir:'',multi:{count:0,need:0,expires:0},precue:false};
 
     target.addEventListener('pointerdown',e=>onDown(l,e),{passive:false});
     target.addEventListener('pointerup',e=>onUp(l,e),{passive:false});
@@ -335,7 +494,6 @@ function buildLanes(){
   }
   hitline.style.bottom=(LINE_Y-3)+'px';
 }
-buildLanes();
 
 /* Helpers UI */
 function colorizeProgress(){const map={piso:'var(--accent)',viga:'var(--accent-alt)',salto:'var(--accent-salto)',barra:'var(--accent-barra)'};progBar.style.background=getComputedStyle(document.documentElement).getPropertyValue(map[apparatus])||APP[apparatus].color;}
@@ -351,14 +509,16 @@ function loadRoutine(){
     const evento=AP_TO_EVENT[apparatus]||'Piso';
     const nivel =LV_TO_NAME[level]||'Basico';
     routine = RFRoutines.get(nivel, evento);
-    beatMs = RFRoutines.toSpawnMs(routine.bpm);
+    const baseBeat = RFRoutines.toSpawnMs(routine.bpm || 96);
+    const tune = getTune(level);
+    beatMs = Math.round(baseBeat * tune.beatMult); // escalado por nivel
     return true;
   }catch(e){ console.warn('RFRoutines.get error',e); routine=null; beatMs=0; return false; }
 }
 function currentDest(){ return routine?.destrezas?.[currDestIndex]||null; }
 function currentSub(){ const d=currentDest(); return d?.submovs?.[currSubIndex]||null; }
 
-/* Etiquetas legibles para IDs */
+/* Etiquetas legibles */
 function nice(s){return String(s||'').replace(/[-_]/g,' ').replace(/\b\w/g,m=>m.toUpperCase());}
 
 /* Progreso */
@@ -367,6 +527,7 @@ function updateProgressBar(){ const tgt=totalTarget?Math.min(100,(processed/tota
 /* UI init */
 function initUI(){
   el('verBadge').textContent = GAME_VERSION;
+  buildLanes();
   nameInput.value=LS.get('rf22:name','Gimnasta');
   qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));
   qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));
@@ -384,43 +545,78 @@ if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local 
 /* URL params */
 (function(){ try{const u=new URL(location.href);const ap=u.searchParams.get('ap');const lv=u.searchParams.get('lv');const nm=u.searchParams.get('name');if(ap&&APP[ap]){apparatus=ap;LS.set('rf22:ap',ap);} if(lv&&LEVELS[lv]){level=lv;LS.set('rf22:lv',lv);} if(nm){LS.set('rf22:name',nm);} }catch(_){}})();
 
-/* ======= Generación de notas por SUBMOV ======= */
+/* ======= Generación de notas ======= */
 function totalSubmovs(){ return routine?.destrezas?.reduce((a,d)=>a+(d.submovs?.length||0),0)||0; }
-function nextSpawnIntervalFor(sub){ const beats = Math.max(1, Number(sub?.durBeats||1)); return beats * (beatMs||800); }
+function getPerfectFrac(){ return level==='baby' ? 0.55 : level==='intermedio' ? 0.42 : 0.45; }
 
-function glyphFor(tipo, need){
+function nextSpawnIntervalFor(sub){
+  const tune = getTune(level);
+  const beats = Math.max(1, Number(sub?.durBeats||1));
+  let base = beats * (beatMs || 800);
+
+  // jitter
+  const j = tune.jitter || 0;
+  const r = (Math.random()*2 - 1) * j; // [-j, +j]
+  base = Math.round(base * (1 + r));
+
+  // min gap absoluta
+  base = Math.max(base, tune.minGapMs);
+  return base;
+}
+
+function swipeIcon(dir){ return ({up:'↑',down:'↓',left:'←',right:'→'}[dir||'']||'⇵'); }
+function glyphFor(tipo, need, dir){
   switch((tipo||'tap')){
     case 'hold':  return {icon:'⏱', meta:'HOLD'};
-    case 'swipe': return {icon:'⇵', meta:'SWIPE'};
+    case 'swipe': return {icon:swipeIcon(dir), meta:(dir?dir.toUpperCase():'SWIPE')};
     case 'multi': return {icon:'✚', meta:'x'+(need||2)};
     default:      return {icon:'👆', meta:'TAP'};
   }
+}
+
+/* evita carril consecutivo igual */
+function pickLane(){
+  const all=[0,1,2,3];
+  const cand=all.filter(l=>l!==lastLane);
+  const lane=(cand.length?cand:all)[Math.floor(Math.random()*(cand.length?cand.length:all.length))];
+  lastLane=lane; return lane;
 }
 
 function genNextNote(timeBase){
   const d = currentDest();
   const s = currentSub();
   if(!d || !s) return [];
-  const lane=Math.floor(Math.random()*LANES), id=(spawned+1);
+  const lane=pickLane();
   const label = d.nombre || d.id || 'Destreza';
   const tipo = (s.tipo||'tap');
   const peso = Math.max(0, Number(s.peso||1));
-  const windowMs = Math.max(60, Number(s.windowMs||120));
+  const tune = getTune(level);
+  let windowMs = Math.max(60, Number(s.windowMs||120));
+  windowMs = Math.round(windowMs * tune.windowMult);
+
   const needCount = (tipo==='multi') ? Math.max(2, Math.round(Number(s.durBeats||2))) : Math.max(1, Math.round(Number(s.durBeats||1)));
+  const swipeDir = (tipo==='swipe')?(s.swipeDir||''):''; // up/down/left/right
   spawned++;
 
   // etiquetas visibles
   const laneEl = laneEls[lane];
   laneEl.classList.remove('piso','viga','salto','barra');
   laneEl.classList.add(APP[apparatus].theme);
-  const laneLabel = laneEl.querySelector('.note-label'); if(laneLabel) laneLabel.textContent = label;
-  const subLabel  = laneEl.querySelector('.sub-label');  if(subLabel)  subLabel.textContent  = nice(s.nombre || s.id || '');
+  laneEl.querySelector('.note-label').textContent = label;
+  laneEl.querySelector('.sub-label').textContent  = nice(s.nombre || s.id || '');
 
   // avanzar iteradores
   currSubIndex++; if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
 
-  const g = glyphFor(tipo, needCount);
-  const noteObj = {id,time:timeBase,lane,label,tipo,peso,windowMs,need:needCount,hit:false,inProgress:false,hold:{start:0,durMs:0},multi:{count:0,deadline:0},el:null};
+  const g = glyphFor(tipo, needCount, swipeDir);
+  const noteObj = {
+    id:spawned,time:timeBase,lane,label,tipo,peso,windowMs,need:needCount,swipeDir,
+    hit:false,inProgress:false,
+    hold:{start:0,durMs:0},
+    multi:{count:0,deadline:0},
+    precueShown:false,
+    el:null
+  };
   noteObj.render = `<div class="glyph">${g.icon}</div><div class="meta">${g.meta}</div>${tipo==='hold'?'<div class="holdbar"><i style="width:100%"></i></div>':''}`;
   return [noteObj];
 }
@@ -431,6 +627,12 @@ function noteY(n,now){ const lead=1100, t0=n.time-lead, k=(now-t0)/fallMsNow(); 
 
 /* Limpieza */
 function purgeNotesDOM(){ qsa('.note').forEach(x=>x.remove()); for(const n of notes){ if(n.el){try{n.el.remove()}catch(_){}} } notes=[]; }
+
+/* Combo HUD */
+const comboHudEl=el('comboHud');
+function comboHud(){ if(combo>0){ comboHudEl.style.display='inline-block'; comboHudEl.textContent='x'+mult.toFixed(1)+' · '+combo; } else { comboHudEl.style.display='none'; } }
+function onComboHit(){ combo++; mult = combo>=10?2.0: combo>=5?1.5:1.0; comboHud(); }
+function onComboReset(){ combo=0; mult=1.0; comboHud(); }
 
 /* Loop principal */
 function loop(ts){
@@ -459,15 +661,16 @@ function startGame(){
   ended=false; running=true; paused=false; pauseBtn.textContent='⏸'; pausedMask.style.display='none';
   LS.set('rf22:name',nameInput.value||'Gimnasta'); LS.set('rf22:ap',apparatus); LS.set('rf22:lv',level);
   hits={perfect:0,good:0,miss:0}; score=0; laneHits=[0,0,0,0];
+  onComboReset();
 
-  loadRoutine(); currDestIndex=0; currSubIndex=0;
+  loadRoutine(); currDestIndex=0; currSubIndex=0; lastLane=-1;
 
   totalTarget = totalSubmovs(); spawned=0; processed=0;
   const firstSub = currentSub() || {durBeats:1};
   nextSpawnAt = nextSpawnIntervalFor(firstSub);
 
   // limpia etiquetas
-  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; const sl=lane.querySelector('.sub-label'); if(sl) sl.textContent=''; }
+  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; laneInput[laneEls.indexOf(lane)].precue=false; }
 
   updateProgressBar(); updateLaneCounters(); updateHUD();
   startTs=null; timeline=0; progBar.style.width='0%';
@@ -488,14 +691,12 @@ function endGame(){
   rName.textContent=nameInput.value||'Gimnasta';
   rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
 
-  // limpia etiquetas
-  for(const lane of laneEls){ const lbl=lane.querySelector('.note-label'); if(lbl) lbl.textContent=''; const sl=lane.querySelector('.sub-label'); if(sl) sl.textContent=''; }
+  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; }
 
   results.style.display='flex';
   results.classList.add('locked');
   [playAgain,nextEvent,toMain].forEach(b=>b.disabled=true);
   document.activeElement && document.activeElement.blur && document.activeElement.blur();
-
   clearTimeout(resultsUnlockTimer);
   resultsUnlockTimer = setTimeout(()=>{
     results.classList.remove('locked');
@@ -505,12 +706,28 @@ function endGame(){
   saveLeaderboard(medal,emoji); renderLeaderboard(); saveLastRun();
 }
 
-/* Render de notas (con icono y holdbar) */
+/* Render de notas + HOLD HUD + PRE-CUE */
 function updateNotes(){
   const now=timeline; const keep=[];
   for(const n of notes){
     const y = noteY(n, now);
-    // hold visual en progreso
+
+    // Pre-cue: parpadeo ~200ms antes de entrar al radio "good"
+    if(!n.precueShown){
+      const {goodR}=windowToRadiusPx(n);
+      const dist = (y - (LINE_Y + goodR));
+      if(dist>0){
+        const pxPerMs = LANE_SPAN / fallMsNow();
+        const msToGood = dist / pxPerMs;
+        if(msToGood<=220){
+          const sl = laneEls[n.lane].querySelector('.sub-label');
+          if(sl){ sl.classList.add('precue'); setTimeout(()=>sl.classList.remove('precue'), 600); }
+          n.precueShown=true;
+        }
+      }
+    }
+
+    // hold visual
     if(n.inProgress && n.tipo==='hold' && n.el){
       const pct = Math.max(0, Math.min(1, (now - n.hold.start) / n.hold.durMs));
       const bar = n.el.querySelector('.holdbar > i'); if(bar){ bar.style.width = ((1-pct)*100).toFixed(1)+'%'; }
@@ -532,12 +749,11 @@ function updateNotes(){
 }
 
 /* ======= GESTOS ======= */
-let laneInputState=[];
 function onDown(l,e){
   if(!running || paused || ended) return;
   e.preventDefault();
   laneEls[l].querySelector('.target')?.classList.add('bounce');
-  const st=laneInput[l]; st.down=true; st.downX=e.clientX||0; st.downY=e.clientY||0; st.downT=timeline; st.swipe=false;
+  const st=laneInput[l]; st.down=true; st.downX=e.clientX||0; st.downY=e.clientY||0; st.downT=timeline; st.swipe=false; st.swipeDir='';
 
   const note = pickCand(l);
   if(!note) return;
@@ -557,8 +773,7 @@ function onDown(l,e){
       note.multi.deadline = timeline + (Math.max(1,note.need) * beatMs);
     }
     note.multi.count++;
-    // actualizar meta visible xN
-    if(note.el){ const meta=note.el.querySelector('.meta'); if(meta){ meta.textContent = 'x'+Math.max(0, note.need - note.multi.count + 1); } }
+    if(note.el && note.tipo==='multi'){ const meta=note.el.querySelector('.meta'); if(meta){ meta.textContent = 'x'+Math.max(0, note.need - note.multi.count + 1); } }
     if(note.multi.count >= (note.need||2)){
       finalizeHit(note, 'multi');
     }
@@ -567,9 +782,18 @@ function onDown(l,e){
 function onMove(l,e){
   const st=laneInput[l]; if(!st.down) return;
   const dx=(e.clientX||0)-st.downX, dy=(e.clientY||0)-st.downY;
-  if(Math.hypot(dx,dy)>=SWIPE_MIN_PX) st.swipe=true;
+  const dist = Math.hypot(dx,dy);
+  if(dist>=SWIPE_MIN_PX){
+    st.swipe=true;
+    const ang = Math.atan2(dy,dx);
+    const deg = ang*180/Math.PI;
+    if( Math.abs(deg) <=45 ) st.swipeDir='right';
+    else if( Math.abs(deg) >=135 ) st.swipeDir='left';
+    else if( deg>0 ) st.swipeDir='down';
+    else st.swipeDir='up';
+  }
 }
-function onUp(l,e){
+function onUp(l,_e){
   const st=laneInput[l];
   if(!running || paused || ended || !st.down){ st.down=false; return; }
   st.down=false;
@@ -580,15 +804,17 @@ function onUp(l,e){
     const held = timeline - n.hold.start;
     if(held + 40 >= n.hold.durMs){ finalizeHit(n, 'hold'); }
     else { registerMiss(n); }
-    laneInput[l].holding=null;
-    return;
+    laneInput[l].holding=null; return;
   }
   if(note && note.tipo==='swipe' && st.swipe){
-    const ok = tryJudgeWindow(note);
-    if(ok) finalizeHit(note,'swipe');
+    const ok = tryJudgeWindow(note) && swipeMatches(note, st.swipeDir);
+    if(ok) finalizeHit(note,'swipe'); else registerMiss(note);
   }
 }
 function onCancel(l,_e){ const st=laneInput[l]; st.down=false; if(st.holding){ registerMiss(st.holding); st.holding=null; } }
+
+/* Validación swipe por dirección */
+function swipeMatches(note, dir){ if(!note || note.tipo!=='swipe') return false; const need=(note.swipeDir||'').toLowerCase(); if(!need) return true; return dir===need; }
 
 /* Candidata por carril */
 function pickCand(lane){
@@ -596,12 +822,13 @@ function pickCand(lane){
   return notes.filter(n=>n.lane===lane && !n.hit).map(n=>({n,y:noteY(n,now)})).sort((a,b)=>Math.abs(a.y-LINE_Y)-Math.abs(b.y-LINE_Y))[0]?.n || null;
 }
 
-/* Ventana temporal → tolerancia espacial dinámica */
+/* Ventanas de acierto -> radios espaciales */
 function windowToRadiusPx(note){
   const pxPerMs = LANE_SPAN / fallMsNow();
-  const maxR = (note.windowMs||120) * pxPerMs;
-  const goodR = Math.max(16, Math.min(64, maxR));
-  const perfectR = Math.max(8, Math.min(goodR, goodR*PERFECT_FRAC));
+  const maxR    = (note.windowMs||120) * pxPerMs;
+  const goodR   = Math.max(16, Math.min(72, maxR));
+  const perfectFrac = getPerfectFrac();
+  const perfectR = Math.max(10, Math.min(goodR, goodR*perfectFrac));
   return {perfectR, goodR};
 }
 function tryJudgeWindow(note){
@@ -610,7 +837,7 @@ function tryJudgeWindow(note){
   return dy<=goodR;
 }
 
-/* Finalizar acierto */
+/* Finalizar acierto + combo */
 function finalizeHit(note, _kind){
   const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
   const {perfectR,goodR}=windowToRadiusPx(note);
@@ -620,17 +847,21 @@ function finalizeHit(note, _kind){
   if(note.el){note.el.remove(); note.el=null;}
 
   const base = (rank==='perfect')?100:60;
-  const delta = Math.round(base * Math.max(0.1, Number(note.peso||1)));
-  if(rank==='perfect'){hits.perfect++;score+=delta;SFX.perfect();buzz(18);}else{hits.good++;score+=delta;SFX.good();buzz(12);}
-  laneHits[note.lane]++; updateLaneCounters(note.lane); flashLine(rank); floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta}`, rank);
+  const raw = Math.round(base * Math.max(0.1, Number(note.peso||1)));
+  const delta = Math.round(raw * mult);
+  if(rank==='perfect'){hits.perfect++;score+=delta;SFX.perfect();haptic('perfect');}
+  else{hits.good++;score+=delta;SFX.good();haptic('good');}
+  laneHits[note.lane]++; updateLaneCounters(note.lane); flashLine(rank);
+  floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta} (x${mult.toFixed(1)})`, rank);
   updateHUD(); updateProgressBar();
+  onComboHit();
 
   // limpiar etiquetas si no quedan notas
   const hasFuture = notes.some(x=>!x.hit && x.lane===note.lane && x.el);
   if(!hasFuture){
     const lane = laneEls[note.lane];
-    const lbl = lane?.querySelector('.note-label'); if(lbl) lbl.textContent='';
-    const sl  = lane?.querySelector('.sub-label');  if(sl)  sl.textContent='';
+    lane.querySelector('.note-label').textContent='';
+    lane.querySelector('.sub-label').textContent='';
   }
 }
 
@@ -638,8 +869,9 @@ function finalizeHit(note, _kind){
 function registerMiss(note){
   note.hit=true; processed++;
   if(note.el){note.el.remove(); note.el=null;}
-  hits.miss++; flashLine('miss'); floatText(note.lane,'Miss','miss'); SFX.miss(); buzz(40);
+  hits.miss++; flashLine('miss'); floatText(note.lane,'Miss','miss'); SFX.miss(); haptic('miss');
   updateHUD(); updateProgressBar();
+  onComboReset();
 }
 
 /* Feedback línea */
@@ -667,6 +899,15 @@ resumeBtn.onclick=()=>pauseBtn.click();
 pausedMask.addEventListener('pointerdown',()=>{ if(paused) pauseBtn.click(); });
 pauseBox.addEventListener('pointerdown',e=>e.stopPropagation());
 
+helpBtn.onclick=()=>helpMask.style.display='flex';
+helpClose.onclick=()=>helpMask.style.display='none';
+helpMask.addEventListener('pointerdown',e=>{ if(e.target===helpMask) helpMask.style.display='none'; });
+
+qaBtn.onclick=()=>openQA();
+el('qaClose').onclick=()=>qaMask.style.display='none';
+el('qaReset').onclick=()=>{ setTuneAll({...LV_TUNE_DEFAULT}); fillQA(); saveQA(); };
+el('qaApply').onclick=()=>{ saveQA(); qaMask.style.display='none'; alert('Guardado. Inicia una partida para aplicar los cambios.'); };
+
 muteBtn.onclick=()=>SFX.setMuted(!SFX.isMuted());
 playAgain.onclick=()=>startGame();
 nextEvent.onclick=()=>{nextApparatus();startGame();};
@@ -678,18 +919,69 @@ apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if
 lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); loadRoutine(); renderLeaderboard(); buildLanes();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
-/* Teclado: 1–4 (tap rápido) */
-addEventListener('keydown',(e)=>{ if(!running || paused || ended) return; const map={'1':0,'2':1,'3':2,'4':3}; if(e.key in map){ e.preventDefault(); onDown(map[e.key],{clientX:0,clientY:0}); onUp(map[e.key],{}); } },{passive:false});
+/* Accesibilidad teclado (v0.24.3 features se mantienen) */
+const KB={hold:false, swipe:false, swipeDir:'', lastLane:0};
+addEventListener('keydown',(e)=>{
+  if(!running || paused || ended) return;
+  const key=e.key;
+  if(key==='h' || key==='H'){ KB.hold=true; e.preventDefault(); return; }
+  if(key==='s' || key==='S'){ KB.swipe=true; e.preventDefault(); return; }
+  if(key==='m' || key==='M'){ KB.multi=true; e.preventDefault(); return; }
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){ KB.swipeDir = ({ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'})[key]; e.preventDefault(); return; }
+  const map={'1':0,'2':1,'3':2,'4':3};
+  if(key in map){
+    const lane=map[key]; KB.lastLane=lane; e.preventDefault();
+    if(KB.hold){ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); }
+    else if(KB.swipe){
+      const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){
+        const dir = KB.swipeDir || 'up';
+        if( tryJudgeWindow(cand) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } else { registerMiss(cand); }
+      }
+    }else if(KB.multi){
+      const cand = pickCand(lane); if(cand && cand.tipo==='multi'){ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); }
+      else { onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
+    }else{ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
+  }
+},{passive:false});
+addEventListener('keyup',(e)=>{
+  if(e.key==='h' || e.key==='H'){ if(KB.hold){ KB.hold=false; onUp(KB.lastLane,{}); } }
+  if(e.key==='s' || e.key==='S'){ KB.swipe=false; KB.swipeDir=''; }
+  if(e.key==='m' || e.key==='M'){ KB.multi=false; }
+},{passive:true});
 
 /* Auto-pausa */
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) pauseBtn.click(); });
 
+/* ===== Tuning (QA) ===== */
+function openQA(){ fillQA(); qaMask.style.display='flex'; }
+function fillQA(){
+  const t=getTuneAll();
+  for(const lv of ['baby','basico','intermedio']){
+    for(const k of ['beatMult','minGapMs','windowMult','jitter']){
+      const id=`qa_${lv}_${k}`, lab=`${id}_val`;
+      const elR=el(id), elL=el(lab);
+      elR.value = t[lv][k];
+      elL.textContent = String(t[lv][k]);
+      elR.oninput = (e)=>{ elL.textContent=e.target.value; };
+    }
+  }
+}
+function saveQA(){
+  const t=getTuneAll();
+  for(const lv of ['baby','basico','intermedio']){
+    t[lv].beatMult   = parseFloat(el(`qa_${lv}_beatMult`).value);
+    t[lv].minGapMs   = parseInt(el(`qa_${lv}_minGapMs`).value,10);
+    t[lv].windowMult = parseFloat(el(`qa_${lv}_windowMult`).value);
+    t[lv].jitter     = parseFloat(el(`qa_${lv}_jitter`).value);
+  }
+  setTuneAll(t);
+}
+
 /* Inicial */
 (function(){
-  loadRoutine();
-  totalTarget = totalSubmovs();
-  colorizeProgress();
-  renderLeaderboard();
+  el('verBadge').textContent=GAME_VERSION;
+  loadRoutine(); totalTarget = totalSubmovs();
+  colorizeProgress(); renderLeaderboard();
   continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
 })();
 </script>
