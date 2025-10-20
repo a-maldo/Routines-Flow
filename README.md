@@ -1,15 +1,16 @@
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.5.1
+Versión: v0.24.6
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
-Fecha: 2025-10-19
+Fecha: 2025-10-20
 
-Cambios v0.24.5.1:
-- Fix: variables duplicadas (playAgain/nextEvent/toMain).
-- Fix: colorizeProgress usa var(--*) correctamente.
-- Fix: espaciado de notas toma currentSub() (durBeats) para el tempo real.
-- UX: anti-tap final END_GRACE_MS=600ms.
-- Scoring: clamp y redondeo 4 dec antes de UI.
-- Gestos: hold tolerante (+60ms).
-- UI: sub-label a 12px; verBadge seteado una sola vez.
+Cambios clave (v0.24.6):
+- Full-lane input (opción QA) + anti-mash.
+- Halos de ventana Perfect/Good dinámicos en la línea.
+- Feedback Early/Late con error en ms.
+- Calibración de latencia (Offset ms).
+- Precues: guía de swipe y tip “APUNTA A LA LÍNEA”.
+- Beat grid sutil.
+- Tuning por defecto: más espacio entre notas en Baby/Básico.
+- rf-v0.4 (tap/hold/swipe/multi) integrado.
