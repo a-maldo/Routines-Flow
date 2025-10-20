@@ -1,20 +1,20 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.5.0
+Versión: v0.24.5.1
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-19
 
-Novedades v0.24.5.0:
-- Scoring /10.00 usando submovimientos (GD v0.4.1).
-- Bonus Logro (+5% MAX_D) y Penalty Miss Destreza (−10% MAX_D).
-- Bonos de Conexión/Serie aplicados solo con destrezas “logradas”.
-- Panel QA: sección “Scoring (10.0)” (GoodFactor, Bonus, Penalty).
-- Ranking y HUD muestran puntaje con dos decimales.
-
-Depende de: RFRoutines v0.4+ con baseD y pesos normalizados por submov.
+Cambios v0.24.5.1:
+- Fix: variables duplicadas (playAgain/nextEvent/toMain).
+- Fix: colorizeProgress usa var(--*) correctamente.
+- Fix: espaciado de notas toma currentSub() (durBeats) para el tempo real.
+- UX: anti-tap final END_GRACE_MS=600ms.
+- Scoring: clamp y redondeo 4 dec antes de UI.
+- Gestos: hold tolerante (+60ms).
+- UI: sub-label a 12px; verBadge seteado una sola vez.
 ========================================
 -->
 
@@ -27,7 +27,7 @@ Depende de: RFRoutines v0.4+ con baseD y pesos normalizados por submov.
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="color-scheme" content="light"/>
-<title>Routines Flow — TGC (v0.24.5.0)</title>
+<title>Routines Flow — TGC (v0.24.5.1)</title>
 
 <style>
   :root{
@@ -68,7 +68,7 @@ Depende de: RFRoutines v0.4+ con baseD y pesos normalizados por submov.
   .lane.barra .note-label{border-color:var(--accent-barra)}
   .sub-label{
     position:absolute;top:36px;left:50%;transform:translateX(-50%);
-    padding:3px 8px;border-radius:999px;font-weight:800;font-size:11px;color:#334155;
+    padding:3px 8px;border-radius:999px;font-weight:800;font-size:12px;color:#334155;
     background:rgba(148,163,184,.18);border:1px solid #e5e7eb;white-space:nowrap;user-select:none;pointer-events:none;z-index:7;
   }
   @keyframes precueBlink{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
@@ -340,13 +340,13 @@ if(!window.RFRoutines || !window.RFRoutines.get){
 </script>
 
 <script>
-/* ===== Routines Flow — v0.24.5.0 ===== */
+/* ===== Routines Flow — v0.24.5.1 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Versión */
-const GAME_VERSION='v0.24.5.0';
+const GAME_VERSION='v0.24.5.1';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
@@ -394,7 +394,7 @@ let idToIdx={};
 let conexiones=[];
 
 /* Anti taps final */
-const END_GRACE_MS = 450;
+const END_GRACE_MS = 600;
 let resultsUnlockTimer = 0;
 
 /* Refs UI */
@@ -442,7 +442,10 @@ function buildLanes(){
 }
 
 /* Helpers */
-function colorizeProgress(){const map={piso:'var(--accent)',viga:'var(--accent-alt)',salto:'var(--accent-salto)',barra:'var(--accent-barra)'};progBar.style.background=getComputedStyle(document.documentElement).getPropertyValue(map[apparatus])||APP[apparatus].color;}
+function colorizeProgress(){
+  const varMap={piso:'--accent', viga:'--accent-alt', salto:'--accent-salto', barra:'--accent-barra'};
+  progBar.style.background = `var(${varMap[apparatus]||'--accent'})`;
+}
 function refreshBadges(){apparatusLabel.textContent=APP[apparatus].label;levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase();colorizeProgress();}
 function updateLaneCounters(onlyLane){if(onlyLane===undefined){for(let l=0;l<LANES;l++){const t=laneEls[l]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[l];}}else{const t=laneEls[onlyLane]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[onlyLane];}}
 function nice(s){return String(s||'').replace(/[-_]/g,' ').replace(/\b\w/g,m=>m.toUpperCase());}
@@ -487,13 +490,13 @@ function updateProgressBar(){ const tgt=totalTarget?Math.min(100,(processed/tota
 
 /* UI init */
 function initUI(){
-  el('verBadge').textContent = GAME_VERSION;
+  verBadge.textContent = GAME_VERSION;
   buildLanes();
   nameInput.value=LS.get('rf22:name','Gimnasta');
   qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));
   qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));
   refreshBadges();updateLaneCounters();renderLeaderboard();
-  continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
+  continueLastBtn.style.display=LS.get('rf22:last:run10',null)?'':'';
 }
 initUI();
 
@@ -623,10 +626,11 @@ function loop(ts){
 
   if(!paused){
     while(spawned<totalTarget && timeline>=nextSpawnAt){
+      /* usar SIEMPRE el sub actual para temporización */
+      const subForTiming = currentSub() || {durBeats:1};
       const newOnes = genNextNote(nextSpawnAt);
       notes = notes.concat(newOnes);
-      const last = newOnes[0];
-      nextSpawnAt += nextSpawnIntervalFor({durBeats:last.need});
+      nextSpawnAt += nextSpawnIntervalFor(subForTiming);
     }
     updateNotes();
     if(processed>=totalTarget && notes.length===0){ endGame(); return; }
@@ -690,6 +694,7 @@ function endGame(){
   }
 
   let finalScore = Math.max(0, Math.min(10, score10 + addend));
+  finalScore = Math.round(finalScore * 10000) / 10000; // estabilidad antes de UI
 
   const medal= finalScore>=9.00?'oro': finalScore>=8.00?'plata':'bronce';
   const emoji= medal==='oro'?'🥇': medal==='plata'?'🥈':'🥉';
@@ -799,7 +804,7 @@ function onUp(l,_e){
   if(st.holding){
     const n=st.holding;
     const held = timeline - n.hold.start;
-    if(held + 40 >= n.hold.durMs){ finalizeHit(n, 'hold'); }
+    if(held + 60 >= n.hold.durMs){ finalizeHit(n, 'hold'); }
     else { registerMiss(n); }
     laneInput[l].holding=null; return;
   }
@@ -865,10 +870,6 @@ function nextApparatus(){const idx=ORDER.indexOf(apparatus);apparatus=ORDER[(idx
 function goToMain(){results.style.display='none';panel.style.display='';score10=0;hits={perfect:0,good:0,miss:0};updateHUD();}
 
 /* Listeners UI */
-el('verBadge').textContent=GAME_VERSION;
-function updateAllUI(){refreshBadges(); renderLeaderboard(); buildLanes();}
-
-const playAgain=el('playAgain'), nextEvent=el('nextEvent'), toMain=el('toMain'); // rebind por scope
 startBtn.onclick=startGame;
 restartBtn.onclick=()=>startGame();
 pauseBtn.onclick=()=>{ if(!running) return; paused=!paused; pauseBtn.textContent=paused?'▶':'⏸'; pausedMask.style.display=paused?'flex':'none';
@@ -888,12 +889,12 @@ el('qaApply').onclick=()=>{ saveQA(); qaMask.style.display='none'; alert('Guarda
 
 muteBtn.onclick=()=>SFX.setMuted(!SFX.isMuted());
 playAgain.onclick=()=>startGame();
-nextEvent.onclick=()=>{nextApparatus();updateAllUI();startGame();};
+nextEvent.onclick=()=>{nextApparatus();buildLanes();refreshBadges();renderLeaderboard();startGame();};
 toMain.onclick=()=>goToMain();
-continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));updateAllUI();startGame();}};
+continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));buildLanes();refreshBadges();renderLeaderboard();startGame();}};
 
-apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); updateAllUI();},{passive:true});
-lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); updateAllUI();},{passive:true});
+apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); buildLanes(); refreshBadges(); renderLeaderboard();},{passive:true});
+lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); buildLanes(); refreshBadges(); renderLeaderboard();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
 /* Teclado básico (opcional) */
@@ -947,7 +948,7 @@ function saveQA(){
 
 /* Inicial */
 (function(){
-  el('verBadge').textContent=GAME_VERSION;
+  verBadge.textContent=GAME_VERSION;
   loadRoutine(); totalTarget = (routine?.destrezas||[]).reduce((a,d)=>a+(d.submovs?.length||0),0);
   colorizeProgress(); renderLeaderboard();
   continueLastBtn.style.display=LS.get('rf22:last:run10',null)?'':'';
