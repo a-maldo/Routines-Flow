@@ -1,17 +1,20 @@
 <!--
 ========================================
 🏅 Routines Flow (nombre del juego)
-Versión: v0.24.4
+Versión: v0.24.5.0
 Estado: Estable — Pre-lanzamiento interno
 Desarrollado para: Turabo Gymnastics Center (TGC)
 Autor: Axel Maldonado — Proyecto TGC Games
 Fecha: 2025-10-19
 
-Cambios clave v0.24.4:
-- Ritmo escalado por nivel (beatMult) + minGapMs + windowMult + jitter.
-- Separación mínima entre spawns y anti-repetición inmediata de carril.
-- Perfect dinámico por nivel (Baby más amable).
-- Panel "Tuning (QA)" con sliders y persistencia.
+Novedades v0.24.5.0:
+- Scoring /10.00 usando submovimientos (GD v0.4.1).
+- Bonus Logro (+5% MAX_D) y Penalty Miss Destreza (−10% MAX_D).
+- Bonos de Conexión/Serie aplicados solo con destrezas “logradas”.
+- Panel QA: sección “Scoring (10.0)” (GoodFactor, Bonus, Penalty).
+- Ranking y HUD muestran puntaje con dos decimales.
+
+Depende de: RFRoutines v0.4+ con baseD y pesos normalizados por submov.
 ========================================
 -->
 
@@ -23,8 +26,8 @@ Cambios clave v0.24.4:
 <meta name="theme-color" content="#0f172a"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="color-scheme" content="light dark"/>
-<title>Routines Flow — TGC (v0.24.4)</title>
+<meta name="color-scheme" content="light"/>
+<title>Routines Flow — TGC (v0.24.5.0)</title>
 
 <style>
   :root{
@@ -38,7 +41,6 @@ Cambios clave v0.24.4:
     --shadow-strong: 0 10px 22px rgba(15,23,42,.18);
     --note-shadow: 0 8px 18px rgba(0,0,0,.18);
   }
-
   *{box-sizing:border-box}
   html,body{overscroll-behavior:none; touch-action:manipulation;}
   body{margin:0;background:var(--bg2);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;display:flex;justify-content:center;padding:8px;min-height:100dvh}
@@ -53,45 +55,31 @@ Cambios clave v0.24.4:
   .lanes{position:absolute;inset:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .lane{position:relative;background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:16px;overflow:visible}
 
-  /* Etiqueta visible de la destreza */
+  /* Etiquetas visibles */
   .note-label{
     position:absolute;top:6px;left:50%;transform:translateX(-50%);
     padding:6px 10px;border-radius:14px;font-weight:900;font-size:13px;color:#0b1220;
-    background:#fff;border:2px solid transparent;
-    box-shadow:0 6px 16px rgba(0,0,0,.12);
+    background:#fff;border:2px solid transparent; box-shadow:0 6px 16px rgba(0,0,0,.12);
     white-space:nowrap;user-select:none;pointer-events:none;z-index:8;
   }
   .lane.piso  .note-label{border-color:var(--accent)}
   .lane.viga  .note-label{border-color:var(--accent-alt)}
   .lane.salto .note-label{border-color:var(--accent-salto)}
   .lane.barra .note-label{border-color:var(--accent-barra)}
-
-  /* Submovimiento visible + pre-cue */
   .sub-label{
     position:absolute;top:36px;left:50%;transform:translateX(-50%);
-    padding:3px 8px;border-radius:999px;font-weight:800;font-size:11px;
-    color:#334155;background:rgba(148,163,184,.18);border:1px solid #e5e7eb;
-    white-space:nowrap;user-select:none;pointer-events:none;z-index:7;
+    padding:3px 8px;border-radius:999px;font-weight:800;font-size:11px;color:#334155;
+    background:rgba(148,163,184,.18);border:1px solid #e5e7eb;white-space:nowrap;user-select:none;pointer-events:none;z-index:7;
   }
   @keyframes precueBlink{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
   .sub-label.precue{animation:precueBlink .6s ease 1}
 
-  /* Nota con icono/acción y HUD hold */
-  .note{
-    position:absolute;left:50%;transform:translateX(-50%);
-    border-radius:16px;color:#fff;font-weight:800;font-size:13px;
-    padding:12px 16px;box-shadow:var(--note-shadow);
-    border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;
-    width:64px;min-height:48px;display:flex;flex-direction:column;align-items:center;gap:6px;
-  }
+  /* Nota con acción y HUD hold */
+  .note{position:absolute;left:50%;transform:translateX(-50%);border-radius:16px;color:#fff;font-weight:800;font-size:13px;padding:12px 16px;box-shadow:var(--note-shadow);border:1px solid rgba(255,255,255,.35);user-select:none;cursor:pointer;width:64px;min-height:48px;display:flex;flex-direction:column;align-items:center;gap:6px}
   .note .glyph{font-size:22px;line-height:1}
   .note .meta{font-size:11px;font-weight:900;opacity:.95}
-  .note .holdbar{
-    position:relative;width:40px;height:6px;border-radius:999px;background:rgba(255,255,255,.35);overflow:hidden;border:1px solid rgba(255,255,255,.5)
-  }
-  .note .holdbar > i{
-    position:absolute;left:0;top:0;bottom:0;width:100%;background:#fff;opacity:.9;display:block;transition:width .06s linear
-  }
+  .note .holdbar{position:relative;width:40px;height:6px;border-radius:999px;background:rgba(255,255,255,.35);overflow:hidden;border:1px solid rgba(255,255,255,.5)}
+  .note .holdbar > i{position:absolute;left:0;top:0;bottom:0;width:100%;background:#fff;opacity:.9;display:block;transition:width .06s linear}
   .note.piso{background:var(--accent)} .note.viga{background:var(--accent-alt)}
   .note.salto{background:var(--accent-salto)} .note.barra{background:var(--accent-barra)}
 
@@ -122,9 +110,6 @@ Cambios clave v0.24.4:
   .btn.alt{background:#f3f6fb;color:#0f172a;border-color:#e5e7eb}
   .btn:disabled{opacity:.55;cursor:default;filter:saturate(.6)}
 
-  /* HUD combo */
-  .comboHud{background:#0f172a;color:#fff;border-radius:999px;padding:4px 8px;font-weight:900;font-size:12px;margin-left:6px}
-
   .leaderboard{margin-top:10px;border:1px solid #eef2f7;border-radius:14px;background:#fff;overflow:hidden}
   .leaderboard h4{margin:0;padding:10px 12px;font-size:13px;background:#f8fafc;border-bottom:1px solid #eef2f7}
   .leaderboard table{width:100%;border-collapse:collapse}
@@ -135,7 +120,7 @@ Cambios clave v0.24.4:
 
   .results{position:absolute;inset:0;background:rgba(255,255,255,.96);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:40;padding-bottom:var(--safe);opacity:1;transition:opacity .18s ease}
   .results.locked{pointer-events:none;opacity:.98}
-  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
   .kpi{padding:10px;border:1px solid #e5e7eb;border-radius:12px}
   .ok{background:#ecfdf5}.warn{background:#fff7ed}.bad{background:#fef2f2}
   .medal{margin-top:8px;font-weight:900}
@@ -152,7 +137,6 @@ Cambios clave v0.24.4:
   .pausedMask .box{background:rgba(15,23,42,.9);padding:16px 20px;border-radius:14px;font-weight:900;display:flex;flex-direction:column;gap:10px;align-items:center}
   .pausedMask .box button{border:1px solid #fff;background:#10b981;color:#fff;border-radius:12px;padding:10px 14px;font-weight:900;cursor:pointer}
 
-  /* Overlay ayuda */
   .helpMask{position:absolute;inset:0;background:rgba(15,23,42,.55);color:#fff;display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(1.5px)}
   .helpBox{background:#0f172a;border:1px solid #334155;border-radius:16px;padding:16px;max-width:520px;margin:12px}
   .helpBox h3{margin:0 0 8px 0}
@@ -161,7 +145,6 @@ Cambios clave v0.24.4:
   .helpKbd{font-weight:900;border:1px solid #334155;padding:2px 6px;border-radius:6px;background:#0b1220}
   .helpClose{margin-top:10px;background:#10b981;border:1px solid #10b981;border-radius:12px;color:#052e1f;font-weight:900;padding:10px;cursor:pointer}
 
-  /* Panel Tuning (QA) */
   .qaMask{position:absolute;inset:0;background:rgba(15,23,42,.35);color:#fff;display:none;align-items:flex-end;justify-content:center;z-index:45}
   .qaPanel{width:100%;max-width:560px;background:#fff;color:#0b1220;border-radius:16px 16px 0 0;border:1px solid #e5e7eb;box-shadow:0 -12px 24px rgba(0,0,0,.12);padding:12px 14px}
   .qaPanel h3{margin:4px 0 10px 0;font-size:16px}
@@ -181,11 +164,10 @@ Cambios clave v0.24.4:
     <div class="title">
       ⭐ Routines Flow — <span id="apparatusLabel">Salto</span>
       <span class="chip" id="verBadge"></span>
-      <span class="comboHud" id="comboHud" style="display:none">x1.0</span>
+      <span class="chip" title="Puntaje /10">Score: <b id="score">0.00</b></span>
     </div>
     <div class="hud">
       <span class="chip" id="levelBadge">BABY GYM</span>
-      <span class="chip">Puntaje: <b id="score">0</b></span>
       <button class="btn-icon" id="helpBtn" title="¿Cómo jugar?" type="button">❔</button>
       <button class="btn-icon" id="qaBtn" title="Tuning (QA)" type="button">QA⚙️</button>
       <button class="btn-icon" id="muteBtn" title="Sonido" type="button" aria-label="Silenciar o activar sonido" aria-pressed="false"><span id="muteIcon">🔊</span></button>
@@ -234,7 +216,7 @@ Cambios clave v0.24.4:
     <div class="leaderboard" id="lb">
       <h4>🏆 Ranking (Top 10 por aparato + nivel)</h4>
       <div style="overflow:auto;max-height:180px">
-        <table id="lbTable"><thead><tr><th class="pos">#</th><th>Nombre</th><th>Puntaje</th><th>Premio</th><th>Fecha</th></tr></thead><tbody></tbody></table>
+        <table id="lbTable"><thead><tr><th class="pos">#</th><th>Nombre</th><th>Score (/10)</th><th>Premio</th><th>Fecha</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="cta" style="margin:10px 12px">
         <button class="btn alt" id="resetLB" type="button">Reiniciar ranking actual</button>
@@ -248,9 +230,10 @@ Cambios clave v0.24.4:
       <div class="kpi ok"><b id="rPerfect">0</b><div class="subtitle">Perfect</div></div>
       <div class="kpi warn"><b id="rGood">0</b><div class="subtitle">Good</div></div>
       <div class="kpi bad"><b id="rMiss">0</b><div class="subtitle">Miss</div></div>
+      <div class="kpi"><b id="rDLogradas">0</b><div class="subtitle">Destrezas logradas</div></div>
     </div>
     <div class="medal" id="medal"></div>
-    <div style="font-size:40px;font-weight:900;margin-top:8px" id="rScore">0</div>
+    <div style="font-size:40px;font-weight:900;margin-top:8px" id="rScore">0.00</div>
     <div class="actions">
       <button class="btn" id="playAgain" type="button">Jugar de nuevo</button>
       <button class="btn" id="nextEvent" type="button" style="background:#2563eb;border-color:#2563eb">Siguiente evento</button>
@@ -265,7 +248,7 @@ Cambios clave v0.24.4:
     </div>
   </div>
 
-  <!-- Overlay ayuda (¿Cómo jugar?) -->
+  <!-- Ayuda -->
   <div class="helpMask" id="helpMask">
     <div class="helpBox">
       <h3>¿Cómo jugar?</h3>
@@ -274,10 +257,6 @@ Cambios clave v0.24.4:
         <div class="helpItem"><span class="helpKbd">⏱ Hold</span><span>Mantén hasta vaciar la barra.</span></div>
         <div class="helpItem"><span class="helpKbd">⇧/⇩/⇦/⇨ Swipe</span><span>Desliza en la dirección pedida.</span></div>
         <div class="helpItem"><span class="helpKbd">✚ xN Multi</span><span>Da N toques dentro de la ventana.</span></div>
-        <div class="helpItem"><span class="helpKbd">1–4</span><span>Selecciona carril y hace <b>tap</b>.</span></div>
-        <div class="helpItem"><span class="helpKbd">H + (1–4)</span><span>Inicia <b>hold</b> (suelta H para terminar).</span></div>
-        <div class="helpItem"><span class="helpKbd">S + ↑/↓/←/→ + (1–4)</span><span>Hace <b>swipe</b> direccional en el carril.</span></div>
-        <div class="helpItem"><span class="helpKbd">M + (1–4)</span><span>Añade un toque a <b>multi</b>.</span></div>
       </div>
       <button class="helpClose" id="helpClose">Entendido</button>
     </div>
@@ -286,75 +265,44 @@ Cambios clave v0.24.4:
   <!-- Panel Tuning (QA) -->
   <div class="qaMask" id="qaMask" aria-hidden="true">
     <div class="qaPanel" role="dialog" aria-modal="true" aria-label="Tuning QA">
-      <h3>⚙️ Tuning (QA) · Ritmo y Ventanas</h3>
+      <h3>⚙️ Tuning (QA)</h3>
       <div class="qaGrid">
-        <!-- Baby -->
+        <!-- Ritmo -->
         <div class="qaCard">
-          <div><b>Baby</b> <span class="qaSub">Aprendizaje suave</span></div>
-          <div class="qaRow">
-            <label>beatMult</label>
-            <input type="range" min="0.8" max="2.0" step="0.01" id="qa_baby_beatMult"><span id="qa_baby_beatMult_val">1.55</span>
-          </div>
-          <div class="qaRow">
-            <label>minGapMs</label>
-            <input type="range" min="400" max="1500" step="10" id="qa_baby_minGapMs"><span id="qa_baby_minGapMs_val">900</span>
-          </div>
-          <div class="qaRow">
-            <label>windowMult</label>
-            <input type="range" min="0.8" max="1.5" step="0.01" id="qa_baby_windowMult"><span id="qa_baby_windowMult_val">1.18</span>
-          </div>
-          <div class="qaRow">
-            <label>jitter</label>
-            <input type="range" min="0.00" max="0.30" step="0.01" id="qa_baby_jitter"><span id="qa_baby_jitter_val">0.12</span>
-          </div>
+          <div><b>Ritmo · Baby</b> <span class="qaSub">Aprendizaje</span></div>
+          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_baby_beatMult"><span id="qa_baby_beatMult_val">1.55</span></div>
+          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1500" step="10" id="qa_baby_minGapMs"><span id="qa_baby_minGapMs_val">900</span></div>
+          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_baby_windowMult"><span id="qa_baby_windowMult_val">1.18</span></div>
+          <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_baby_jitter"><span id="qa_baby_jitter_val">0.12</span></div>
         </div>
-        <!-- Basico -->
         <div class="qaCard">
-          <div><b>Básico</b> <span class="qaSub">Flujo moderado</span></div>
-          <div class="qaRow">
-            <label>beatMult</label>
-            <input type="range" min="0.8" max="2.0" step="0.01" id="qa_basico_beatMult"><span id="qa_basico_beatMult_val">1.22</span>
-          </div>
-          <div class="qaRow">
-            <label>minGapMs</label>
-            <input type="range" min="400" max="1200" step="10" id="qa_basico_minGapMs"><span id="qa_basico_minGapMs_val">700</span>
-          </div>
-          <div class="qaRow">
-            <label>windowMult</label>
-            <input type="range" min="0.8" max="1.5" step="0.01" id="qa_basico_windowMult"><span id="qa_basico_windowMult_val">1.00</span>
-          </div>
-          <div class="qaRow">
-            <label>jitter</label>
-            <input type="range" min="0.00" max="0.30" step="0.01" id="qa_basico_jitter"><span id="qa_basico_jitter_val">0.10</span>
-          </div>
+          <div><b>Ritmo · Básico</b></div>
+          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_basico_beatMult"><span id="qa_basico_beatMult_val">1.22</span></div>
+          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1200" step="10" id="qa_basico_minGapMs"><span id="qa_basico_minGapMs_val">700</span></div>
+          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_basico_windowMult"><span id="qa_basico_windowMult_val">1.00</span></div>
+          <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_basico_jitter"><span id="qa_basico_jitter_val">0.10</span></div>
         </div>
-        <!-- Intermedio -->
         <div class="qaCard">
-          <div><b>Intermedio</b> <span class="qaSub">Cercano a ritmo real</span></div>
-          <div class="qaRow">
-            <label>beatMult</label>
-            <input type="range" min="0.8" max="2.0" step="0.01" id="qa_intermedio_beatMult"><span id="qa_intermedio_beatMult_val">1.00</span>
-          </div>
-          <div class="qaRow">
-            <label>minGapMs</label>
-            <input type="range" min="400" max="1000" step="10" id="qa_intermedio_minGapMs"><span id="qa_intermedio_minGapMs_val">560</span>
-          </div>
-          <div class="qaRow">
-            <label>windowMult</label>
-            <input type="range" min="0.8" max="1.5" step="0.01" id="qa_intermedio_windowMult"><span id="qa_intermedio_windowMult_val">0.95</span>
-          </div>
-          <div class="qaRow">
-            <label>jitter</label>
-            <input type="range" min="0.00" max="0.30" step="0.01" id="qa_intermedio_jitter"><span id="qa_intermedio_jitter_val">0.08</span>
-          </div>
+          <div><b>Ritmo · Intermedio</b></div>
+          <div class="qaRow"><label>beatMult</label><input type="range" min="0.8" max="2.0" step="0.01" id="qa_intermedio_beatMult"><span id="qa_intermedio_beatMult_val">1.00</span></div>
+          <div class="qaRow"><label>minGapMs</label><input type="range" min="400" max="1000" step="10" id="qa_intermedio_minGapMs"><span id="qa_intermedio_minGapMs_val">560</span></div>
+          <div class="qaRow"><label>windowMult</label><input type="range" min="0.8" max="1.5" step="0.01" id="qa_intermedio_windowMult"><span id="qa_intermedio_windowMult_val">0.95</span></div>
+          <div class="qaRow"><label>jitter</label><input type="range" min="0.00" max="0.30" step="0.01" id="qa_intermedio_jitter"><span id="qa_intermedio_jitter_val">0.08</span></div>
         </div>
+
+        <!-- Scoring (10.0) -->
+        <div class="qaCard">
+          <div><b>Scoring (10.0)</b> <span class="qaSub">Submov → Destreza → /10</span></div>
+          <div class="qaRow"><label>GoodFactor</label><input type="range" min="0.70" max="0.95" step="0.01" id="qa_score_good"><span id="qa_score_good_val">0.80</span></div>
+          <div class="qaRow"><label>Bonus Logro</label><input type="range" min="0.00" max="0.10" step="0.01" id="qa_score_bonus"><span id="qa_score_bonus_val">0.05</span></div>
+          <div class="qaRow"><label>Penalty Miss</label><input type="range" min="0.05" max="0.20" step="0.01" id="qa_score_penalty"><span id="qa_score_penalty_val">0.10</span></div>
+          <div class="qaSub">Los bonos de conexión/serie usan los valores del GD.</div>
+        </div>
+
         <!-- Info -->
         <div class="qaCard">
           <div><b>Notas</b></div>
-          <div class="qaSub">• <b>beatMult</b>: multiplica el beat del GD (más alto = más lento).<br/>
-          • <b>minGapMs</b>: separación mínima entre notas.<br/>
-          • <b>windowMult</b>: amplía/reduce ventana de acierto.<br/>
-          • <b>jitter</b>: variación aleatoria (0=metrónomo, 0.1 recomendado).</div>
+          <div class="qaSub">• Score es /10.00. Cada submov pesa por su destreza (baseD) y su peso interno.<br/>• “Lograda” = sin Miss. Logro suma bonus; si hubo Miss, aplica penalty.<br/>• Bonos entre destrezas se suman solo si ambas están “logradas”.</div>
         </div>
       </div>
       <div class="qaActions">
@@ -368,37 +316,37 @@ Cambios clave v0.24.4:
   <div class="progress"><div id="progBar"></div></div>
 </div>
 
-<!-- ==== RFRoutines v0.4 fallback (demo autónoma si no está disponible) ==== -->
+<!-- ==== RFRoutines v0.4 fallback mínimo ==== -->
 <script>
 if(!window.RFRoutines || !window.RFRoutines.get){
   window.RFRoutines = {
-    get:()=>({
-      nivel:"Basico",evento:"Piso",bpm:96,
+    get:()=>({nivel:"Basico",evento:"Piso",bpm:96,
       destrezas:[
-        {nombre:"Rodada",submovs:[
-          {id:"tap-in",tipo:"tap",windowMs:120,peso:.3},
-          {id:"roll",tipo:"swipe",durBeats:1,windowMs:150,peso:.4,swipeDir:"up"},
-          {id:"tap-out",tipo:"tap",windowMs:120,peso:.3}
+        {id:"rodada-frente", nombre:"Rodada al frente", baseD:0.30, submovs:[
+          {id:"tap-in",tipo:"tap",windowMs:120,peso:0.3},
+          {id:"roll",tipo:"swipe",durBeats:1,windowMs:140,peso:0.4,swipeDir:"up"},
+          {id:"tap-out",tipo:"tap",windowMs:120,peso:0.3}
         ]},
-        {nombre:"Salto estirado",submovs:[
-          {id:"batida",tipo:"tap",windowMs:110,peso:.3},
-          {id:"aire",tipo:"hold",durBeats:1,windowMs:140,peso:.4},
-          {id:"stick",tipo:"tap",windowMs:110,peso:.3}
-        ]}
-      ]}),
+        {id:"salto-estirado", nombre:"Salto estirado", baseD:0.25, submovs:[
+          {id:"batida",tipo:"tap",windowMs:110,peso:0.3},
+          {id:"aire",tipo:"hold",durBeats:1,windowMs:140,peso:0.4},
+          {id:"stick",tipo:"tap",windowMs:110,peso:0.3}
+        ]}],
+      bonos:[{tipo:"conexion",desde:"rodada-frente",hasta:"salto-estirado",valor:0.10}]
+    }),
     toSpawnMs:(bpm)=>Math.round(60000/Math.max(40,Math.min(220,bpm)))
   };
 }
 </script>
 
 <script>
-/* ===== Routines Flow — v0.24.4 ===== */
+/* ===== Routines Flow — v0.24.5.0 ===== */
 const el=id=>document.getElementById(id), qsa=s=>[...document.querySelectorAll(s)];
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}}, set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
 const esc=s=>(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 /* Versión */
-const GAME_VERSION='v0.24.4';
+const GAME_VERSION='v0.24.5.0';
 
 /* Orden y datos base */
 const ORDER=['salto','barra','viga','piso'];
@@ -415,29 +363,35 @@ const LV_TUNE_DEFAULT = {
   basico:     { beatMult: 1.22, minGapMs: 700,  windowMult: 1.00, jitter: 0.10 },
   intermedio: { beatMult: 1.00, minGapMs: 560,  windowMult: 0.95, jitter: 0.08 },
 };
-/* Carga/guarda QA */
+/* Scoring (10.0) defaults QA */
+const SCORE_TUNE_DEFAULT = { goodFactor:0.80, bonusLogro:0.05, penaltyMissD:0.10 };
+
+/* Persistencia QA */
 function getTuneAll(){ return LS.get('rf24:tune', LV_TUNE_DEFAULT); }
 function setTuneAll(v){ LS.set('rf24:tune', v); }
 function getTune(lv){ const all=getTuneAll(); return all[lv] || LV_TUNE_DEFAULT[lv]; }
+function getScoreTune(){ return LS.get('rf24:scoreTune', SCORE_TUNE_DEFAULT); }
+function setScoreTune(v){ LS.set('rf24:scoreTune', v); }
 
-/* Preferencias del sistema */
+/* Preferencias */
 const prefersReduced = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* Estado */
+/* Estado principal */
 let apparatus=LS.get('rf22:ap','salto');
 let level=LS.get('rf22:lv','baby');
 let running=false, paused=false, ended=false, startTs=null, timeline=0, raf=0;
-let notes=[], hits={perfect:0,good:0,miss:0}, score=0, laneHits=[0,0,0,0];
+let notes=[], hits={perfect:0,good:0,miss:0}, laneHits=[0,0,0,0];
 let totalTarget=0, spawned=0, processed=0, nextSpawnAt=1400;
 
 let routine=null, beatMs=0;
 let currDestIndex=0, currSubIndex=0;
-
-/* Pacing state extra */
 let lastLane=-1;
 
-/* Combo / multiplicador */
-let combo=0, mult=1.0;
+/* Scoring /10 */
+let score10=0.0;
+let dMeta=[]; // por destreza: {id,name,maxD,sub:[{maxS,scored}], hasMiss, sumSub, lograda}
+let idToIdx={};
+let conexiones=[];
 
 /* Anti taps final */
 const END_GRACE_MS = 450;
@@ -446,7 +400,7 @@ let resultsUnlockTimer = 0;
 /* Refs UI */
 const lanesWrap=el('lanes'), hitline=el('hitline'), progBar=el('progBar'), pausedMask=el('pausedMask'), pauseBox=el('pauseBox'), resumeBtn=el('resumeBtn');
 const scoreEl=el('score'), levelBadge=el('levelBadge'), apparatusLabel=el('apparatusLabel'), verBadge=el('verBadge');
-const panel=el('panel'), results=el('results'), rName=el('rName'), rScore=el('rScore'), rPerfect=el('rPerfect'), rGood=el('rGood'), rMiss=el('rMiss'), medalEl=el('medal');
+const panel=el('panel'), results=el('results'), rName=el('rName'), rScore=el('rScore'), rPerfect=el('rPerfect'), rGood=el('rGood'), rMiss=el('rMiss'), medalEl=el('medal'), rDLogradas=el('rDLogradas');
 const startBtn=el('startBtn'), restartBtn=el('restartBtn'), pauseBtn=el('pauseBtn'), muteBtn=el('muteBtn'), muteIcon=el('muteIcon');
 const playAgain=el('playAgain'), nextEvent=el('nextEvent'), toMain=el('toMain'), continueLastBtn=el('continueLast');
 const nameInput=el('playerName'), apPills=el('apPills'), lvPills=el('lvPills');
@@ -463,16 +417,9 @@ const SFX=(()=>{let ctx=null,muted=LS.get('rf22:muted',false);
 })();
 addEventListener('pointerdown',()=>SFX.resume(),{once:true});
 muteIcon.textContent=SFX.isMuted()?'🔇':'🔊'; muteBtn.setAttribute('aria-pressed',String(SFX.isMuted()));
-function haptic(kind){
-  try{
-    if(!navigator.vibrate) return;
-    if(kind==='perfect') navigator.vibrate(12);
-    else if(kind==='good') navigator.vibrate(8);
-    else if(kind==='miss') navigator.vibrate([30,40,30]);
-  }catch(_){}
-}
+function haptic(kind){try{if(!navigator.vibrate)return;if(kind==='perfect')navigator.vibrate(12);else if(kind==='good')navigator.vibrate(8);else if(kind==='miss')navigator.vibrate([30,40,30]);}catch(_){}}  
 
-/* Carriles + input por gestos */
+/* Carriles */
 let laneEls=[], laneInput=[];
 function buildLanes(){
   lanesWrap.innerHTML=''; laneEls.length=0; laneInput.length=0;
@@ -486,7 +433,6 @@ function buildLanes(){
     lanesWrap.appendChild(lane); laneEls.push(lane);
 
     laneInput[l]={down:false,downX:0,downY:0,downT:0,holding:null,swipe:false,swipeDir:'',multi:{count:0,need:0,expires:0},precue:false};
-
     target.addEventListener('pointerdown',e=>onDown(l,e),{passive:false});
     target.addEventListener('pointerup',e=>onUp(l,e),{passive:false});
     target.addEventListener('pointercancel',e=>onCancel(l,e),{passive:true});
@@ -495,15 +441,17 @@ function buildLanes(){
   hitline.style.bottom=(LINE_Y-3)+'px';
 }
 
-/* Helpers UI */
+/* Helpers */
 function colorizeProgress(){const map={piso:'var(--accent)',viga:'var(--accent-alt)',salto:'var(--accent-salto)',barra:'var(--accent-barra)'};progBar.style.background=getComputedStyle(document.documentElement).getPropertyValue(map[apparatus])||APP[apparatus].color;}
 function refreshBadges(){apparatusLabel.textContent=APP[apparatus].label;levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase();colorizeProgress();}
 function updateLaneCounters(onlyLane){if(onlyLane===undefined){for(let l=0;l<LANES;l++){const t=laneEls[l]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[l];}}else{const t=laneEls[onlyLane]?.querySelector('.laneCount'); if(t) t.textContent=laneHits[onlyLane];}}
+function nice(s){return String(s||'').replace(/[-_]/g,' ').replace(/\b\w/g,m=>m.toUpperCase());}
 
-/* Rutina (v0.4) */
+/* Routines access */
 const AP_TO_EVENT={piso:'Piso', salto:'Salto', barra:'Barra', viga:'Viga'};
 const LV_TO_NAME={baby:'Baby', basico:'Basico', intermedio:'Intermedio'};
 
+/* Carga rutina + precálculo scoring */
 function loadRoutine(){
   try{
     const evento=AP_TO_EVENT[apparatus]||'Piso';
@@ -511,17 +459,30 @@ function loadRoutine(){
     routine = RFRoutines.get(nivel, evento);
     const baseBeat = RFRoutines.toSpawnMs(routine.bpm || 96);
     const tune = getTune(level);
-    beatMs = Math.round(baseBeat * tune.beatMult); // escalado por nivel
+    beatMs = Math.round(baseBeat * tune.beatMult);
+
+    // scoring: precálculos
+    const Dsum = (routine.destrezas||[]).reduce((a,d)=>a+Math.max(0,Number(d.baseD||0)),0) || 1;
+    dMeta = [];
+    idToIdx = {};
+    (routine.destrezas||[]).forEach((d,i)=>{
+      const maxD = 10 * (Math.max(0,Number(d.baseD||0)) / Dsum);
+      // normaliza pesos por si acaso
+      const sub = (d.submovs||[]).map(s=>({peso:Math.max(0,Number(s.peso||0)), maxS:0, scored:false}));
+      const subWsum = sub.reduce((a,s)=>a+s.peso,0) || 1;
+      sub.forEach(s=>{ s.maxS = maxD * (s.peso / subWsum); });
+      const meta={idx:i, id:d.id||`D${i+1}`, name:d.nombre||`Destreza ${i+1}`, maxD, sub, hasMiss:false, sumSub:0, lograda:false};
+      dMeta.push(meta); idToIdx[meta.id]=i;
+    });
+    conexiones = Array.isArray(routine.bonos)?routine.bonos.slice():[];
+
     return true;
-  }catch(e){ console.warn('RFRoutines.get error',e); routine=null; beatMs=0; return false; }
+  }catch(e){ console.warn('RFRoutines.get error',e); routine=null; beatMs=0; dMeta=[]; idToIdx={}; conexiones=[]; return false; }
 }
 function currentDest(){ return routine?.destrezas?.[currDestIndex]||null; }
 function currentSub(){ const d=currentDest(); return d?.submovs?.[currSubIndex]||null; }
 
-/* Etiquetas legibles */
-function nice(s){return String(s||'').replace(/[-_]/g,' ').replace(/\b\w/g,m=>m.toUpperCase());}
-
-/* Progreso */
+/* Progreso UI */
 function updateProgressBar(){ const tgt=totalTarget?Math.min(100,(processed/totalTarget)*100):0; progBar.style.width=tgt.toFixed(2)+'%'; }
 
 /* UI init */
@@ -536,34 +497,39 @@ function initUI(){
 }
 initUI();
 
-/* Leaderboard */
-function lbKey(){return `rf22:lb:${apparatus}:${level}`;}
-function saveLeaderboard(medal,emoji){const k=lbKey();const cur=LS.get(k,[]);cur.push({name:nameInput.value||'Gimnasta',score,medal,medalEmoji:emoji,date:new Date().toISOString()});cur.sort((a,b)=>b.score-a.score);cur.splice(10);LS.set(k,cur);}
-function renderLeaderboard(){if(!lbBody)return;const data=LS.get(lbKey(),[]);lbBody.innerHTML='';data.forEach((r,i)=>{const tr=document.createElement('tr');const premio=(r.medalEmoji||'')+' '+(r.medal?(r.medal[0].toUpperCase()+r.medal.slice(1)):'');tr.innerHTML=`<td class="pos">${i+1}</td><td>${esc(r.name)}</td><td>${r.score}</td><td>${premio}</td><td>${new Date(r.date).toLocaleDateString()}</td>`;lbBody.appendChild(tr);});}
-if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local para este aparato y nivel?')){LS.set(lbKey(),[]);renderLeaderboard();}}}
+/* Leaderboard /10 */
+function lbKey(){return `rf25:lb10:${apparatus}:${level}`;} // namespace nuevo para /10
+function saveLeaderboard(medal,emoji,score10f){
+  const k=lbKey();const cur=LS.get(k,[]);
+  cur.push({name:nameInput.value||'Gimnasta',score10:score10f,medal,medalEmoji:emoji,date:new Date().toISOString(),ver:GAME_VERSION});
+  cur.sort((a,b)=>b.score10-a.score10);cur.splice(10);LS.set(k,cur);
+}
+function renderLeaderboard(){
+  if(!lbBody) return;
+  const data=LS.get(lbKey(),[]);
+  lbBody.innerHTML='';
+  data.forEach((r,i)=>{
+    const tr=document.createElement('tr');
+    const premio=(r.medalEmoji||'')+' '+(r.medal?(r.medal[0].toUpperCase()+r.medal.slice(1)):'');
+    tr.innerHTML=`<td class="pos">${i+1}</td><td>${esc(r.name)}</td><td>${(Number(r.score10)||0).toFixed(2)}</td><td>${premio}</td><td>${new Date(r.date).toLocaleDateString()}</td>`;
+    lbBody.appendChild(tr);
+  });
+}
+if(resetLBBtn){resetLBBtn.onclick=()=>{if(confirm('¿Reiniciar el ranking local para este aparato y nivel (/10)?')){LS.set(lbKey(),[]);renderLeaderboard();}}}
 
 /* URL params */
 (function(){ try{const u=new URL(location.href);const ap=u.searchParams.get('ap');const lv=u.searchParams.get('lv');const nm=u.searchParams.get('name');if(ap&&APP[ap]){apparatus=ap;LS.set('rf22:ap',ap);} if(lv&&LEVELS[lv]){level=lv;LS.set('rf22:lv',lv);} if(nm){LS.set('rf22:name',nm);} }catch(_){}})();
 
 /* ======= Generación de notas ======= */
-function totalSubmovs(){ return routine?.destrezas?.reduce((a,d)=>a+(d.submovs?.length||0),0)||0; }
 function getPerfectFrac(){ return level==='baby' ? 0.55 : level==='intermedio' ? 0.42 : 0.45; }
-
 function nextSpawnIntervalFor(sub){
   const tune = getTune(level);
   const beats = Math.max(1, Number(sub?.durBeats||1));
   let base = beats * (beatMs || 800);
-
-  // jitter
-  const j = tune.jitter || 0;
-  const r = (Math.random()*2 - 1) * j; // [-j, +j]
-  base = Math.round(base * (1 + r));
-
-  // min gap absoluta
+  const j = tune.jitter || 0; const r = (Math.random()*2 - 1) * j; base = Math.round(base * (1 + r));
   base = Math.max(base, tune.minGapMs);
   return base;
 }
-
 function swipeIcon(dir){ return ({up:'↑',down:'↓',left:'←',right:'→'}[dir||'']||'⇵'); }
 function glyphFor(tipo, need, dir){
   switch((tipo||'tap')){
@@ -573,29 +539,18 @@ function glyphFor(tipo, need, dir){
     default:      return {icon:'👆', meta:'TAP'};
   }
 }
-
-/* evita carril consecutivo igual */
-function pickLane(){
-  const all=[0,1,2,3];
-  const cand=all.filter(l=>l!==lastLane);
-  const lane=(cand.length?cand:all)[Math.floor(Math.random()*(cand.length?cand.length:all.length))];
-  lastLane=lane; return lane;
-}
+function pickLane(){ const all=[0,1,2,3]; const cand=all.filter(l=>l!==lastLane); const lane=(cand.length?cand:all)[Math.floor(Math.random()*(cand.length?cand.length:all.length))]; lastLane=lane; return lane; }
 
 function genNextNote(timeBase){
-  const d = currentDest();
-  const s = currentSub();
+  const d = currentDest(); const s = currentSub();
   if(!d || !s) return [];
   const lane=pickLane();
   const label = d.nombre || d.id || 'Destreza';
   const tipo = (s.tipo||'tap');
-  const peso = Math.max(0, Number(s.peso||1));
   const tune = getTune(level);
-  let windowMs = Math.max(60, Number(s.windowMs||120));
-  windowMs = Math.round(windowMs * tune.windowMult);
-
+  let windowMs = Math.max(60, Number(s.windowMs||120)); windowMs = Math.round(windowMs * tune.windowMult);
   const needCount = (tipo==='multi') ? Math.max(2, Math.round(Number(s.durBeats||2))) : Math.max(1, Math.round(Number(s.durBeats||1)));
-  const swipeDir = (tipo==='swipe')?(s.swipeDir||''):''; // up/down/left/right
+  const swipeDir = (tipo==='swipe')?(s.swipeDir||''):'';
   spawned++;
 
   // etiquetas visibles
@@ -605,36 +560,61 @@ function genNextNote(timeBase){
   laneEl.querySelector('.note-label').textContent = label;
   laneEl.querySelector('.sub-label').textContent  = nice(s.nombre || s.id || '');
 
-  // avanzar iteradores
+  // prepara iteradores para la próxima
+  const dIdx = currDestIndex, sIdx = currSubIndex;
   currSubIndex++; if(currSubIndex >= (d.submovs?.length||0)){ currSubIndex=0; currDestIndex++; }
 
   const g = glyphFor(tipo, needCount, swipeDir);
-  const noteObj = {
-    id:spawned,time:timeBase,lane,label,tipo,peso,windowMs,need:needCount,swipeDir,
+  return [{
+    id:spawned,time:timeBase,lane,label,tipo,windowMs,need:needCount,swipeDir,
+    dIdx,sIdx,
     hit:false,inProgress:false,
     hold:{start:0,durMs:0},
     multi:{count:0,deadline:0},
     precueShown:false,
-    el:null
-  };
-  noteObj.render = `<div class="glyph">${g.icon}</div><div class="meta">${g.meta}</div>${tipo==='hold'?'<div class="holdbar"><i style="width:100%"></i></div>':''}`;
-  return [noteObj];
+    el:null,
+    render:`<div class="glyph">${g.icon}</div><div class="meta">${g.meta}</div>${tipo==='hold'?'<div class="holdbar"><i style="width:100%"></i></div>':''}`
+  }];
 }
 
-/* Kinemática */
+/* Kinematics */
 function fallMsNow(){ const base=3600, p=totalTarget?Math.min(1,processed/totalTarget):0; return Math.max(400, base*(1-0.18*p)); }
 function noteY(n,now){ const lead=1100, t0=n.time-lead, k=(now-t0)/fallMsNow(); return HIT_Y + (1-k)*LANE_SPAN; }
 
 /* Limpieza */
 function purgeNotesDOM(){ qsa('.note').forEach(x=>x.remove()); for(const n of notes){ if(n.el){try{n.el.remove()}catch(_){}} } notes=[]; }
 
-/* Combo HUD */
-const comboHudEl=el('comboHud');
-function comboHud(){ if(combo>0){ comboHudEl.style.display='inline-block'; comboHudEl.textContent='x'+mult.toFixed(1)+' · '+combo; } else { comboHudEl.style.display='none'; } }
-function onComboHit(){ combo++; mult = combo>=10?2.0: combo>=5?1.5:1.0; comboHud(); }
-function onComboReset(){ combo=0; mult=1.0; comboHud(); }
+/* UI floats */
+let lineTimer=0; function resetLine(){hitline.className='hitline-global';}
+function flashLine(kind){ resetLine(); hitline.classList.add(kind==='perfect'?'hitline-perfect':kind==='good'?'hitline-good':'hitline-miss','hitline-flash'); clearTimeout(lineTimer); lineTimer=setTimeout(resetLine,300); }
+function floatText(lane,text,kind){ const ln=laneEls[lane]; const s=document.createElement('div'); s.className=`float ${kind}`; s.style.bottom=(LINE_Y+12)+'px'; s.textContent=text; ln.appendChild(s); setTimeout(()=>{ try{s.remove()}catch(_){}} , prefersReduced ? 1 : 650); }
 
-/* Loop principal */
+/* HUD + progreso */
+function updateHUD(){scoreEl.textContent=Number(score10).toFixed(2);}
+
+/* ===== Scoring helpers ===== */
+function addSubScore(dIdx, sIdx, rank){
+  const cfg = getScoreTune();
+  const gm = (rank==='perfect')?1.0:cfg.goodFactor;
+  const dm = dMeta[dIdx]; if(!dm) return 0;
+  const sm = dm.sub[sIdx]; if(!sm || sm.scored) return 0;
+  const delta = (sm.maxS||0) * gm;
+  sm.scored=true; dm.sumSub += delta;
+  // ¿ya está lograda? (todas scored y sin miss)
+  const allScored = dm.sub.every(x=>x.scored);
+  if(allScored) dm.lograda = !dm.hasMiss;
+  score10 += delta;
+  return delta;
+}
+function markMiss(dIdx, sIdx){
+  const dm = dMeta[dIdx]; if(!dm) return;
+  const sm = dm.sub[sIdx]; if(!sm || sm.scored) return;
+  sm.scored=true; dm.hasMiss=true; // suma 0
+  const allScored = dm.sub.every(x=>x.scored);
+  if(allScored) dm.lograda = !dm.hasMiss;
+}
+
+/* ===== Loop principal ===== */
 function loop(ts){
   if(!running) return;
   if(!startTs) startTs = ts || performance.now();
@@ -660,18 +640,16 @@ function startGame(){
   purgeNotesDOM();
   ended=false; running=true; paused=false; pauseBtn.textContent='⏸'; pausedMask.style.display='none';
   LS.set('rf22:name',nameInput.value||'Gimnasta'); LS.set('rf22:ap',apparatus); LS.set('rf22:lv',level);
-  hits={perfect:0,good:0,miss:0}; score=0; laneHits=[0,0,0,0];
-  onComboReset();
+  hits={perfect:0,good:0,miss:0}; laneHits=[0,0,0,0]; score10=0.0;
 
   loadRoutine(); currDestIndex=0; currSubIndex=0; lastLane=-1;
 
-  totalTarget = totalSubmovs(); spawned=0; processed=0;
+  totalTarget = (routine?.destrezas||[]).reduce((a,d)=>a+(d.submovs?.length||0),0);
+  spawned=0; processed=0;
   const firstSub = currentSub() || {durBeats:1};
   nextSpawnAt = nextSpawnIntervalFor(firstSub);
 
-  // limpia etiquetas
-  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; laneInput[laneEls.indexOf(lane)].precue=false; }
-
+  for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; }
   updateProgressBar(); updateLaneCounters(); updateHUD();
   startTs=null; timeline=0; progBar.style.width='0%';
   results.style.display='none'; results.classList.remove('locked');
@@ -680,16 +658,47 @@ function startGame(){
   resetLine(); requestAnimationFrame(loop);
 }
 
+/* Fin de juego: sumar bonus/penalty por destreza + bonos conexión */
 function endGame(){
   running=false; ended=true; if(raf) cancelAnimationFrame(raf);
   purgeNotesDOM();
 
-  const totalHit=hits.perfect+hits.good+hits.miss, acc= totalHit? (hits.perfect/totalHit):0;
-  const medal= acc>=0.8?'oro': acc>=0.55?'plata':'bronce';
+  const cfg = getScoreTune();
+  let addend = 0.0;
+  let logradasCount = 0;
+
+  for(const d of dMeta){
+    if(d.sub.length===0) continue;
+    if(d.hasMiss){
+      addend += -(cfg.penaltyMissD * d.maxD);
+    }else{
+      addend += +(cfg.bonusLogro * d.maxD);
+      logradasCount++;
+    }
+  }
+
+  // Bonos conexión/serie si ambas destrezas involucradas están logradas
+  if(Array.isArray(conexiones)){
+    for(const b of conexiones){
+      const from = idToIdx[b.desde]; const to = idToIdx[b.hasta];
+      if((b.tipo==='conexion' || b.tipo==='serie') && Number(b.valor)>0 && dMeta[from] && dMeta[to]){
+        if(dMeta[from].lograda && dMeta[to].lograda){
+          addend += (Number(b.valor) * dMeta[to].maxD);
+        }
+      }
+    }
+  }
+
+  let finalScore = Math.max(0, Math.min(10, score10 + addend));
+
+  const medal= finalScore>=9.00?'oro': finalScore>=8.00?'plata':'bronce';
   const emoji= medal==='oro'?'🥇': medal==='plata'?'🥈':'🥉';
-  medalEl.textContent=`${emoji} ${medal[0].toUpperCase()+medal.slice(1)}`;
+
   rName.textContent=nameInput.value||'Gimnasta';
-  rScore.textContent=score; rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
+  rScore.textContent=finalScore.toFixed(2);
+  rPerfect.textContent=hits.perfect; rGood.textContent=hits.good; rMiss.textContent=hits.miss;
+  rDLogradas.textContent=`${logradasCount}/${dMeta.length}`;
+  medalEl.textContent=`${emoji} ${medal[0].toUpperCase()+medal.slice(1)}`;
 
   for(const lane of laneEls){ lane.querySelector('.note-label').textContent=''; lane.querySelector('.sub-label').textContent=''; }
 
@@ -703,16 +712,16 @@ function endGame(){
     [playAgain,nextEvent,toMain].forEach(b=>b.disabled=false);
   }, END_GRACE_MS);
 
-  saveLeaderboard(medal,emoji); renderLeaderboard(); saveLastRun();
+  saveLeaderboard(medal,emoji,finalScore); renderLeaderboard(); saveLastRun(finalScore);
 }
 
-/* Render de notas + HOLD HUD + PRE-CUE */
+/* Render + precue + hold HUD */
 function updateNotes(){
   const now=timeline; const keep=[];
   for(const n of notes){
     const y = noteY(n, now);
 
-    // Pre-cue: parpadeo ~200ms antes de entrar al radio "good"
+    // Pre-cue
     if(!n.precueShown){
       const {goodR}=windowToRadiusPx(n);
       const dist = (y - (LINE_Y + goodR));
@@ -733,12 +742,10 @@ function updateNotes(){
       const bar = n.el.querySelector('.holdbar > i'); if(bar){ bar.style.width = ((1-pct)*100).toFixed(1)+'%'; }
     }
 
-    if(!n.hit && y <= MISS_LINE_Y && !n.inProgress){
-      registerMiss(n); continue;
-    }
+    if(!n.hit && y <= MISS_LINE_Y && !n.inProgress){ registerMiss(n); continue; }
     if(!n.hit){
       if(!n.el){
-        const b=document.createElement('div'); b.className=`note ${APP[apparatus].theme}`; b.innerHTML=n.render||'';
+        const b=document.createElement('div'); b.className=`note ${APP[apparatus].theme}`; b.innerHTML=n.render||''; 
         b.addEventListener('pointerdown',e=>{e.preventDefault();onDown(n.lane,e);},{passive:false});
         laneEls[n.lane].appendChild(b); n.el=b;
       }
@@ -748,7 +755,7 @@ function updateNotes(){
   notes=keep;
 }
 
-/* ======= GESTOS ======= */
+/* ==== GESTOS y juicio ==== */
 function onDown(l,e){
   if(!running || paused || ended) return;
   e.preventDefault();
@@ -767,30 +774,20 @@ function onDown(l,e){
   }else if(note.tipo==='tap'){
     finalizeHit(note, 'tap');
   }else if(note.tipo==='multi'){
-    if(note.multi.count===0){
-      const ok = tryJudgeWindow(note);
-      if(!ok) return;
-      note.multi.deadline = timeline + (Math.max(1,note.need) * beatMs);
-    }
+    const ok = tryJudgeWindow(note); if(!ok) return;
+    if(note.multi.count===0){ note.multi.deadline = timeline + (Math.max(1,note.need) * beatMs); }
     note.multi.count++;
     if(note.el && note.tipo==='multi'){ const meta=note.el.querySelector('.meta'); if(meta){ meta.textContent = 'x'+Math.max(0, note.need - note.multi.count + 1); } }
-    if(note.multi.count >= (note.need||2)){
-      finalizeHit(note, 'multi');
-    }
+    if(note.multi.count >= (note.need||2)){ finalizeHit(note, 'multi'); }
   }
 }
 function onMove(l,e){
   const st=laneInput[l]; if(!st.down) return;
   const dx=(e.clientX||0)-st.downX, dy=(e.clientY||0)-st.downY;
-  const dist = Math.hypot(dx,dy);
-  if(dist>=SWIPE_MIN_PX){
+  if(Math.hypot(dx,dy)>=SWIPE_MIN_PX){
     st.swipe=true;
-    const ang = Math.atan2(dy,dx);
-    const deg = ang*180/Math.PI;
-    if( Math.abs(deg) <=45 ) st.swipeDir='right';
-    else if( Math.abs(deg) >=135 ) st.swipeDir='left';
-    else if( deg>0 ) st.swipeDir='down';
-    else st.swipeDir='up';
+    const ang = Math.atan2(dy,dx), deg = ang*180/Math.PI;
+    st.swipeDir = ( Math.abs(deg)<=45 ? 'right' : Math.abs(deg)>=135 ? 'left' : (deg>0?'down':'up') );
   }
 }
 function onUp(l,_e){
@@ -813,16 +810,11 @@ function onUp(l,_e){
 }
 function onCancel(l,_e){ const st=laneInput[l]; st.down=false; if(st.holding){ registerMiss(st.holding); st.holding=null; } }
 
-/* Validación swipe por dirección */
 function swipeMatches(note, dir){ if(!note || note.tipo!=='swipe') return false; const need=(note.swipeDir||'').toLowerCase(); if(!need) return true; return dir===need; }
-
-/* Candidata por carril */
 function pickCand(lane){
   const now=timeline;
   return notes.filter(n=>n.lane===lane && !n.hit).map(n=>({n,y:noteY(n,now)})).sort((a,b)=>Math.abs(a.y-LINE_Y)-Math.abs(b.y-LINE_Y))[0]?.n || null;
 }
-
-/* Ventanas de acierto -> radios espaciales */
 function windowToRadiusPx(note){
   const pxPerMs = LANE_SPAN / fallMsNow();
   const maxR    = (note.windowMs||120) * pxPerMs;
@@ -831,32 +823,24 @@ function windowToRadiusPx(note){
   const perfectR = Math.max(10, Math.min(goodR, goodR*perfectFrac));
   return {perfectR, goodR};
 }
-function tryJudgeWindow(note){
-  const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
-  const {goodR}=windowToRadiusPx(note);
-  return dy<=goodR;
-}
+function tryJudgeWindow(note){ const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y); const {goodR}=windowToRadiusPx(note); return dy<=goodR; }
 
-/* Finalizar acierto + combo */
 function finalizeHit(note, _kind){
   const y=noteY(note,timeline), dy=Math.abs(y-LINE_Y);
-  const {perfectR,goodR}=windowToRadiusPx(note);
+  const {perfectR}=windowToRadiusPx(note);
   const rank = (dy<=perfectR)?'perfect':'good';
 
   note.hit=true; processed++;
   if(note.el){note.el.remove(); note.el=null;}
 
-  const base = (rank==='perfect')?100:60;
-  const raw = Math.round(base * Math.max(0.1, Number(note.peso||1)));
-  const delta = Math.round(raw * mult);
-  if(rank==='perfect'){hits.perfect++;score+=delta;SFX.perfect();haptic('perfect');}
-  else{hits.good++;score+=delta;SFX.good();haptic('good');}
+  const delta = addSubScore(note.dIdx, note.sIdx, rank);
+  if(rank==='perfect'){hits.perfect++;SFX.perfect();haptic('perfect');}
+  else{hits.good++;SFX.good();haptic('good');}
   laneHits[note.lane]++; updateLaneCounters(note.lane); flashLine(rank);
-  floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta} (x${mult.toFixed(1)})`, rank);
+  floatText(note.lane, `${rank==='perfect'?'Perfect':'Good'} +${delta.toFixed(2)}`, rank);
   updateHUD(); updateProgressBar();
-  onComboHit();
 
-  // limpiar etiquetas si no quedan notas
+  // limpiar etiquetas si no quedan notas en el carril
   const hasFuture = notes.some(x=>!x.hit && x.lane===note.lane && x.el);
   if(!hasFuture){
     const lane = laneEls[note.lane];
@@ -864,33 +848,27 @@ function finalizeHit(note, _kind){
     lane.querySelector('.sub-label').textContent='';
   }
 }
-
-/* Miss */
 function registerMiss(note){
   note.hit=true; processed++;
   if(note.el){note.el.remove(); note.el=null;}
   hits.miss++; flashLine('miss'); floatText(note.lane,'Miss','miss'); SFX.miss(); haptic('miss');
+  markMiss(note.dIdx, note.sIdx);
   updateHUD(); updateProgressBar();
-  onComboReset();
 }
 
-/* Feedback línea */
-let lineTimer=0; function resetLine(){hitline.className='hitline-global';}
-function flashLine(kind){ resetLine(); hitline.classList.add(kind==='perfect'?'hitline-perfect':kind==='good'?'hitline-good':'hitline-miss','hitline-flash'); clearTimeout(lineTimer); lineTimer=setTimeout(resetLine,300); }
-function floatText(lane,text,kind){ const ln=laneEls[lane]; const s=document.createElement('div'); s.className=`float ${kind}`; s.style.bottom=(LINE_Y+12)+'px'; s.textContent=text; ln.appendChild(s); setTimeout(()=>{ try{s.remove()}catch(_){}} , prefersReduced ? 1 : 650); }
-
-/* HUD + progreso */
-function updateHUD(){scoreEl.textContent=score;}
-
 /* Persistencia */
-function saveLastRun(){LS.set('rf22:last:run',{when:Date.now(),apparatus,level,score,hits});}
-function restoreLastRun(){const r=LS.get('rf22:last:run',null);if(!r)return false;apparatus=r.apparatus||apparatus;level=r.level||level;return true;}
+function saveLastRun(score10f){LS.set('rf22:last:run10',{when:Date.now(),apparatus,level,score10:score10f,hits});}
+function restoreLastRun(){const r=LS.get('rf22:last:run10',null);if(!r)return false;apparatus=r.apparatus||apparatus;level=r.level||level;return true;}
 
 /* Navegación */
 function nextApparatus(){const idx=ORDER.indexOf(apparatus);apparatus=ORDER[(idx+1)%ORDER.length];LS.set('rf22:ap', apparatus);refreshBadges();}
-function goToMain(){results.style.display='none';panel.style.display='';score=0;hits={perfect:0,good:0,miss:0};updateHUD();}
+function goToMain(){results.style.display='none';panel.style.display='';score10=0;hits={perfect:0,good:0,miss:0};updateHUD();}
 
 /* Listeners UI */
+el('verBadge').textContent=GAME_VERSION;
+function updateAllUI(){refreshBadges(); renderLeaderboard(); buildLanes();}
+
+const playAgain=el('playAgain'), nextEvent=el('nextEvent'), toMain=el('toMain'); // rebind por scope
 startBtn.onclick=startGame;
 restartBtn.onclick=()=>startGame();
 pauseBtn.onclick=()=>{ if(!running) return; paused=!paused; pauseBtn.textContent=paused?'▶':'⏸'; pausedMask.style.display=paused?'flex':'none';
@@ -905,49 +883,36 @@ helpMask.addEventListener('pointerdown',e=>{ if(e.target===helpMask) helpMask.st
 
 qaBtn.onclick=()=>openQA();
 el('qaClose').onclick=()=>qaMask.style.display='none';
-el('qaReset').onclick=()=>{ setTuneAll({...LV_TUNE_DEFAULT}); fillQA(); saveQA(); };
+el('qaReset').onclick=()=>{ setTuneAll({...LV_TUNE_DEFAULT}); setScoreTune({...SCORE_TUNE_DEFAULT}); fillQA(); saveQA(); };
 el('qaApply').onclick=()=>{ saveQA(); qaMask.style.display='none'; alert('Guardado. Inicia una partida para aplicar los cambios.'); };
 
 muteBtn.onclick=()=>SFX.setMuted(!SFX.isMuted());
 playAgain.onclick=()=>startGame();
-nextEvent.onclick=()=>{nextApparatus();startGame();};
+nextEvent.onclick=()=>{nextApparatus();updateAllUI();startGame();};
 toMain.onclick=()=>goToMain();
-continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));refreshBadges();startGame();}};
+continueLastBtn.onclick=()=>{if(restoreLastRun()){qsa('#apPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.ap===apparatus));qsa('#lvPills .pill').forEach(p=>p.classList.toggle('on',p.dataset.lv===level));updateAllUI();startGame();}};
 
-/* Aparato/Nivel */
-apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); refreshBadges(); loadRoutine(); renderLeaderboard(); buildLanes();},{passive:true});
-lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); loadRoutine(); renderLeaderboard(); buildLanes();},{passive:true});
+apPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#apPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); apparatus=b.dataset.ap; LS.set('rf22:ap', apparatus); updateAllUI();},{passive:true});
+lvPills.addEventListener('pointerdown',e=>{const b=e.target.closest('.pill'); if(!b)return; qsa('#lvPills .pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); level=b.dataset.lv; LS.set('rf22:lv',level); levelBadge.textContent=(LEVELS[level]?.label||'').toUpperCase(); updateAllUI();},{passive:true});
 nameInput.onchange=()=>LS.set('rf22:name',nameInput.value||'Gimnasta');
 
-/* Accesibilidad teclado (v0.24.3 features se mantienen) */
+/* Teclado básico (opcional) */
 const KB={hold:false, swipe:false, swipeDir:'', lastLane:0};
 addEventListener('keydown',(e)=>{
   if(!running || paused || ended) return;
   const key=e.key;
   if(key==='h' || key==='H'){ KB.hold=true; e.preventDefault(); return; }
   if(key==='s' || key==='S'){ KB.swipe=true; e.preventDefault(); return; }
-  if(key==='m' || key==='M'){ KB.multi=true; e.preventDefault(); return; }
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){ KB.swipeDir = ({ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'})[key]; e.preventDefault(); return; }
   const map={'1':0,'2':1,'3':2,'4':3};
   if(key in map){
     const lane=map[key]; KB.lastLane=lane; e.preventDefault();
     if(KB.hold){ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); }
-    else if(KB.swipe){
-      const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){
-        const dir = KB.swipeDir || 'up';
-        if( tryJudgeWindow(cand) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } else { registerMiss(cand); }
-      }
-    }else if(KB.multi){
-      const cand = pickCand(lane); if(cand && cand.tipo==='multi'){ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); }
-      else { onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
-    }else{ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
+    else if(KB.swipe){ const cand = pickCand(lane); if(cand && cand.tipo==='swipe'){ const dir = KB.swipeDir || 'up'; if( tryJudgeWindow(cand) && swipeMatches(cand, dir) ){ finalizeHit(cand,'swipe'); } else { registerMiss(cand); } } }
+    else{ onDown(lane,{clientX:0,clientY:0,preventDefault:()=>{}}); onUp(lane,{}); }
   }
 },{passive:false});
-addEventListener('keyup',(e)=>{
-  if(e.key==='h' || e.key==='H'){ if(KB.hold){ KB.hold=false; onUp(KB.lastLane,{}); } }
-  if(e.key==='s' || e.key==='S'){ KB.swipe=false; KB.swipeDir=''; }
-  if(e.key==='m' || e.key==='M'){ KB.multi=false; }
-},{passive:true});
+addEventListener('keyup',(e)=>{ if(e.key==='h'||e.key==='H'){ if(KB.hold){ KB.hold=false; onUp(KB.lastLane,{}); } } if(e.key==='s'||e.key==='S'){ KB.swipe=false; KB.swipeDir=''; }},{passive:true});
 
 /* Auto-pausa */
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) pauseBtn.click(); });
@@ -955,16 +920,17 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden && running
 /* ===== Tuning (QA) ===== */
 function openQA(){ fillQA(); qaMask.style.display='flex'; }
 function fillQA(){
-  const t=getTuneAll();
+  const t=getTuneAll(), s=getScoreTune();
   for(const lv of ['baby','basico','intermedio']){
     for(const k of ['beatMult','minGapMs','windowMult','jitter']){
-      const id=`qa_${lv}_${k}`, lab=`${id}_val`;
-      const elR=el(id), elL=el(lab);
-      elR.value = t[lv][k];
-      elL.textContent = String(t[lv][k]);
-      elR.oninput = (e)=>{ elL.textContent=e.target.value; };
+      const id=`qa_${lv}_${k}`, lab=`${id}_val`; const elR=el(id), elL=el(lab);
+      elR.value = t[lv][k]; elL.textContent = String(t[lv][k]); elR.oninput = (e)=>{ elL.textContent=e.target.value; };
     }
   }
+  el('qa_score_good').value=s.goodFactor; el('qa_score_good_val').textContent=String(s.goodFactor);
+  el('qa_score_bonus').value=s.bonusLogro; el('qa_score_bonus_val').textContent=String(s.bonusLogro);
+  el('qa_score_penalty').value=s.penaltyMissD; el('qa_score_penalty_val').textContent=String(s.penaltyMissD);
+  ['qa_score_good','qa_score_bonus','qa_score_penalty'].forEach(id=>{ el(id).oninput=(e)=>{ el(id+'_val').textContent=e.target.value; }; });
 }
 function saveQA(){
   const t=getTuneAll();
@@ -975,14 +941,16 @@ function saveQA(){
     t[lv].jitter     = parseFloat(el(`qa_${lv}_jitter`).value);
   }
   setTuneAll(t);
+  const s={goodFactor:parseFloat(el('qa_score_good').value), bonusLogro:parseFloat(el('qa_score_bonus').value), penaltyMissD:parseFloat(el('qa_score_penalty').value)};
+  setScoreTune(s);
 }
 
 /* Inicial */
 (function(){
   el('verBadge').textContent=GAME_VERSION;
-  loadRoutine(); totalTarget = totalSubmovs();
+  loadRoutine(); totalTarget = (routine?.destrezas||[]).reduce((a,d)=>a+(d.submovs?.length||0),0);
   colorizeProgress(); renderLeaderboard();
-  continueLastBtn.style.display=LS.get('rf22:last:run',null)?'':'';
+  continueLastBtn.style.display=LS.get('rf22:last:run10',null)?'':'';
 })();
 </script>
 </body>
